@@ -83,7 +83,8 @@ func main() {
 				wg.Add(1)
 				go func() {
 					//routine
-					cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
+					//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
+					cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
 					out, err := cmd.CombinedOutput();
 					if err != nil {
 						fmt.Printf("cmd.Run() failed with %s\n", err)
