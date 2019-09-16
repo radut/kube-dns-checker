@@ -1,0 +1,148 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+var (
+	queryTime = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "dns_queries_time",
+			Help: "Time taken for dns query",
+		},
+		[]string{"domain"},
+	)
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	name := query.Get("name")
+	if name == "" {
+		name = "Guest"
+	}
+	log.Printf("Received request for %s\n", name)
+	w.Write([]byte(fmt.Sprintf("Hello, %s\n", name)))
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func readinessHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func main() {
+	// Create Server and Route Handlers
+	r := mux.NewRouter()
+
+	r.HandleFunc("/", handler)
+	r.HandleFunc("/health", healthHandler)
+	r.HandleFunc("/readiness", readinessHandler)
+	r.Handle("/metrics", promhttp.Handler())
+
+	srv := &http.Server{
+		Handler:      r,
+		Addr:         ":8080",
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+	var interval = getEnvAsInt("INTERVAL", 3000)
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	go func() {
+		for {
+			select {
+			case t := <-ticker.C:
+				fmt.Println("Tick at", t)
+
+				go func() {
+					//routine
+					cmd := exec.Command("dig", "@1.2.3.1" ,"+time=5","+tries=1","www.google.ro")
+					out, err := cmd.CombinedOutput()
+					if err != nil {
+						fmt.Printf("cmd.Run() failed with %s\n", err)
+					}
+					fmt.Printf("combined out:\n%s\n", string(out))
+
+				}()
+
+				//go func(i int) {
+				//	defer wg.Done()
+				//	val := slice[i]
+				//	fmt.Printf("i: %v, val: %v\n", i, val)
+				//}(i)
+
+				//queryTime.With(prometheus.Labels{"domain":"www.google.ro"}).Set(rand.Float64());
+			}
+		}
+	}()
+
+	// Start Server
+	go func() {
+		log.Println("Starting Server")
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// Graceful Shutdown
+	waitForShutdown(srv)
+}
+
+func waitForShutdown(srv *http.Server) {
+	interruptChan := make(chan os.Signal, 1)
+	signal.Notify(interruptChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until we receive our signal.
+	<-interruptChan
+
+	// Create a deadline to wait for.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	srv.Shutdown(ctx)
+
+	log.Println("Shutting down")
+	os.Exit(0)
+}
+
+func getEnv(key string, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+
+	return defaultVal
+}
+
+// Simple helper function to read an environment variable into integer or return a default value
+func getEnvAsInt(name string, defaultVal int) int {
+	valueStr := getEnv(name, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+
+	return defaultVal
+}
+
+// Helper to read an environment variable into a bool or return default value
+func getEnvAsBool(name string, defaultVal bool) bool {
+	valStr := getEnv(name, "")
+	if val, err := strconv.ParseBool(valStr); err == nil {
+		return val
+	}
+
+	return defaultVal
+}
