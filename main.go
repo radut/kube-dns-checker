@@ -23,14 +23,14 @@ import (
 var (
 	queryTime = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "dns_queries_time",
-			Help: "Time taken for dns query",
+			Name: "dns_query_time_ms",
+			Help: "Time taken for dns query in milliseconds",
 		},
 		[]string{"domain"},
 	)
 	querySuccess = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "dns_queries_success",
+			Name: "dns_query_success",
 			Help: "DNS responded OK(1) or NOT OK/Timeout(0)",
 		},
 		[]string{"domain"},
