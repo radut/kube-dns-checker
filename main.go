@@ -26,17 +26,25 @@ var (
 		},
 		[]string{"domain"},
 	)
+	querySuccess = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "dns_queries_success",
+			Help: "DNS responded OK(1) or NOT OK/Timeout(0)",
+		},
+		[]string{"domain"},
+	)
 )
+var domain = "www.google.com";
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	name := query.Get("name")
-	if name == "" {
-		name = "Guest"
-	}
-	log.Printf("Received request for %s\n", name)
-	w.Write([]byte(fmt.Sprintf("Hello, %s\n", name)))
-}
+//func handler(w http.ResponseWriter, r *http.Request) {
+//	query := r.URL.Query()
+//	name := query.Get("name")
+//	if name == "" {
+//		name = "Guest"
+//	}
+//	log.Printf("Received request for %s\n", name)
+//	w.Write([]byte(fmt.Sprintf("Hello, %s\n", name)))
+//}
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -50,9 +58,9 @@ func main() {
 	// Create Server and Route Handlers
 	r := mux.NewRouter()
 
-	r.HandleFunc("/", handler)
-	r.HandleFunc("/health", healthHandler)
-	r.HandleFunc("/readiness", readinessHandler)
+	//r.HandleFunc("/", handler)
+	r.HandleFunc("/live", healthHandler)
+	r.HandleFunc("/ready", readinessHandler)
 	r.Handle("/metrics", promhttp.Handler())
 
 	srv := &http.Server{
@@ -68,14 +76,19 @@ func main() {
 			select {
 			case t := <-ticker.C:
 				fmt.Println("Tick at", t)
-
+				now := time.Now()
 				go func() {
 					//routine
-					cmd := exec.Command("dig", "@1.2.3.1" ,"+time=5","+tries=1","www.google.ro")
-					out, err := cmd.CombinedOutput()
+					cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
+					out, err := cmd.CombinedOutput();
 					if err != nil {
 						fmt.Printf("cmd.Run() failed with %s\n", err)
+						querySuccess.With(prometheus.Labels{"domain": domain}).Set(0);
+					} else {
+						querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
 					}
+					elapsed := time.Since(now);
+					queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
 					fmt.Printf("combined out:\n%s\n", string(out))
 
 				}()
@@ -86,7 +99,7 @@ func main() {
 				//	fmt.Printf("i: %v, val: %v\n", i, val)
 				//}(i)
 
-				//queryTime.With(prometheus.Labels{"domain":"www.google.ro"}).Set(rand.Float64());
+				//queryTime.With(prometheus.Labels{"domain":domain}).Set(rand.Float64());
 			}
 		}
 	}()
