@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -78,6 +79,8 @@ func main() {
 			case t := <-ticker.C:
 				fmt.Println("Tick at", t)
 				now := time.Now()
+				var wg sync.WaitGroup
+				wg.Add(1)
 				go func() {
 					//routine
 					cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
@@ -88,12 +91,16 @@ func main() {
 					} else {
 						querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
 					}
-					elapsed := int(math.Round(float64(time.Since(now) / 1_000_000 ) ));
+					elapsed := int(math.Round(float64(time.Since(now) / 1_000_000)));
 					fmt.Printf("elapsed %d ms\n", elapsed)
 					queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
 					fmt.Printf("combined out:\n%s\n", string(out))
 
+					wg.Done() //if we do for,and need to wait for group
+
 				}()
+
+				wg.Wait()
 
 				//go func(i int) {
 				//	defer wg.Done()
