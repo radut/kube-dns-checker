@@ -88,7 +88,8 @@ func main() {
 					} else {
 						querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
 					}
-					elapsed := math.Round(float64(time.Since(now)*1000)) / 1000;
+					elapsed := int( math.Round(float64(time.Since(now)/1000000))) ;
+					fmt.Printf("elapsed %d ms\n", elapsed)
 					queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
 					fmt.Printf("combined out:\n%s\n", string(out))
 
