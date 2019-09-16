@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -87,7 +88,7 @@ func main() {
 					} else {
 						querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
 					}
-					elapsed := time.Since(now);
+					elapsed := math.Round(float64(time.Since(now)*1000)) / 1000;
 					queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
 					fmt.Printf("combined out:\n%s\n", string(out))
 
