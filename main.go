@@ -56,7 +56,46 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func queryDomain() {
+	now := time.Now()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		//routine
+		//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
+		cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
+		out, err := cmd.CombinedOutput();
+		if err != nil {
+			fmt.Printf("cmd.Run() failed with %s\n", err)
+			querySuccess.With(prometheus.Labels{"domain": domain}).Set(0);
+		} else {
+			querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
+		}
+		elapsed := int(math.Round(float64(time.Since(now) / 1_000_000)));
+		fmt.Printf("elapsed %d ms\n", elapsed)
+		queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
+		fmt.Printf("combined out:\n%s\n", string(out))
+
+		wg.Done() //if we do for,and need to wait for group
+
+	}()
+
+	wg.Wait()
+
+	//go func(i int) {
+	//	defer wg.Done()
+	//	val := slice[i]
+	//	fmt.Printf("i: %v, val: %v\n", i, val)
+	//}(i)
+
+	//queryTime.With(prometheus.Labels{"domain":domain}).Set(rand.Float64());
+}
+
 func main() {
+	go func(){
+		queryDomain();
+	}()
+
 	// Create Server and Route Handlers
 	r := mux.NewRouter()
 
@@ -78,38 +117,7 @@ func main() {
 			select {
 			case t := <-ticker.C:
 				fmt.Println("Tick at", t)
-				now := time.Now()
-				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					//routine
-					//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-					cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
-					out, err := cmd.CombinedOutput();
-					if err != nil {
-						fmt.Printf("cmd.Run() failed with %s\n", err)
-						querySuccess.With(prometheus.Labels{"domain": domain}).Set(0);
-					} else {
-						querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
-					}
-					elapsed := int(math.Round(float64(time.Since(now) / 1_000_000)));
-					fmt.Printf("elapsed %d ms\n", elapsed)
-					queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
-					fmt.Printf("combined out:\n%s\n", string(out))
-
-					wg.Done() //if we do for,and need to wait for group
-
-				}()
-
-				wg.Wait()
-
-				//go func(i int) {
-				//	defer wg.Done()
-				//	val := slice[i]
-				//	fmt.Printf("i: %v, val: %v\n", i, val)
-				//}(i)
-
-				//queryTime.With(prometheus.Labels{"domain":domain}).Set(rand.Float64());
+				queryDomain();
 			}
 		}
 	}()
