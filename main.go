@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -21,13 +22,13 @@ import (
 
 var mutex = &sync.Mutex{}
 
-//var domains = []string{"www.google.com", "www.cloudflare.com"}
-var domains = []string{"www.google.com"}
+//var default_domains = "www.google.com,www.cloudflare.com";
+var default_domains = "www.google.com";
 
-var interval = 3   //seconds
-var period = 15    //seconds
-var digTimeout = 5 //seconds
-var digRetries = 1
+var default_interval = 3   //seconds
+var default_period = 15    //seconds
+var default_digTimeout = 5 //seconds
+var default_digRetries = 1
 
 const MAX = 3
 
@@ -93,9 +94,10 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func queryDomains() {
+func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 
-	var timeout = getEnvAsInt("TIMEOUT", digTimeout);
+	var digTimeout = getEnvAsInt("TIMEOUT", default_digTimeout);
+	var digRetries = getEnvAsInt("TRIES", default_digRetries);
 	now := time.Now()
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX)
@@ -104,9 +106,17 @@ func queryDomains() {
 		wg.Add(1)
 		go func(domain string) {
 			//routine
-			fmt.Printf("executing dig for domain :  %s\n", domain)
 			//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-			cmd := exec.Command("dig", "+time="+timeout, "+tries=1", domain)
+			var digArgs = []string{};
+			if (useDnsServer) {
+				digArgs = append(digArgs, "@"+dnsServer);
+			}
+			digArgs = append(digArgs, "+time="+strconv.Itoa(digTimeout));
+			digArgs = append(digArgs, "+tries="+strconv.Itoa(digRetries));
+			digArgs = append(digArgs, domain);
+			fmt.Printf("executing 'dig %v'\n", digArgs)
+			//
+			cmd := exec.Command("dig", digArgs...);
 			out, err := cmd.CombinedOutput()
 			mutex.Lock()
 			queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
@@ -141,15 +151,31 @@ func queryDomains() {
 }
 
 func main() {
-	resetCounters()
-	//getEnvAsInt("RETRIES",)
-	fmt.Printf("Using Config:\n")
-	fmt.Printf("\tdomains: %v\n", domains)
-	fmt.Printf("\tinterval: %d seconds\n", interval)
-
+	var digTimeout = getEnvAsInt("TIMEOUT", default_digTimeout);
+	var digRetries = getEnvAsInt("TRIES", default_digRetries);
+	var interval = getEnvAsInt("INTERVAL", default_interval)
+	var domainsStr = getEnv("DOMAINS", default_domains)
+	var domains = strings.Split(strings.ReplaceAll(domainsStr, " ", ""), ",");
+	var dnsServer, useDnsServer = os.LookupEnv("DNS_SERVER");
+	resetCounters(domains);
+	//
+	fmt.Printf("Using Config :\n")
+	if (useDnsServer) {
+		fmt.Printf("\tDNS Server : %v\n", dnsServer)
+	} else {
+		fmt.Printf("\tDNS Server : default\n");
+	}
+	fmt.Printf("\tDomains    : %v\n", domains)
+	fmt.Printf("\tDig Timeout: %v\n", digTimeout)
+	fmt.Printf("\tDig Retries: %v\n", digRetries)
+	fmt.Printf("\tInterval   : %d seconds\n", interval)
+	fmt.Printf("\n\n")
+	//
+	time.Sleep(2 * time.Second);
+	//
 	go func() {
-		defer starTimer();
-		queryDomains();
+		defer starTimer(interval, domains, useDnsServer, dnsServer);
+		queryDomains(domains, useDnsServer, dnsServer);
 	}()
 
 	// Create Server and Route Handlers
@@ -191,21 +217,20 @@ func main() {
 	waitForShutdown(srv)
 }
 
-func starTimer() {
-	var interval = getEnvAsInt("INTERVAL", interval) * 1000
-	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+func starTimer(interval int, domains []string, useDnsServer bool, dnsServer string) {
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	go func() {
 		for {
 			select {
 			case t := <-ticker.C:
 				fmt.Println("Tick at", t.Format(time.RFC3339))
-				queryDomains()
+				queryDomains(domains, useDnsServer, dnsServer);
 			}
 		}
 	}()
 }
 
-func resetCounters() {
+func resetCounters(domains []string) {
 	mutex.Lock()
 
 	for _, domain := range domains {
