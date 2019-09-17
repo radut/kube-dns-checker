@@ -146,7 +146,8 @@ func main() {
 	fmt.Printf("\tinterval: %d seconds\n", interval)
 
 	go func() {
-		queryDomains()
+		defer starTimer();
+		queryDomains();
 	}()
 
 	// Create Server and Route Handlers
@@ -163,17 +164,8 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	var interval = getEnvAsInt("INTERVAL", interval) * 1000
-	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
-	go func() {
-		for {
-			select {
-			case t := <-ticker.C:
-				fmt.Println("Tick at", t.Format(time.RFC3339))
-				queryDomains()
-			}
-		}
-	}()
+
+
 
 	// Start Server
 	go func() {
@@ -197,6 +189,20 @@ func main() {
 
 	// Graceful Shutdown
 	waitForShutdown(srv)
+}
+
+func starTimer() {
+	var interval = getEnvAsInt("INTERVAL", interval) * 1000
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	go func() {
+		for {
+			select {
+			case t := <-ticker.C:
+				fmt.Println("Tick at", t.Format(time.RFC3339))
+				queryDomains()
+			}
+		}
+	}()
 }
 
 func resetCounters() {
