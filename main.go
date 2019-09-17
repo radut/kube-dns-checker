@@ -86,9 +86,9 @@ func queryDomains() {
 	now := time.Now()
 	var wg sync.WaitGroup
 
-	for _, domain := range domains {
+	for _, d := range domains {
 		wg.Add(1)
-		go func() {
+		go func(domain string) {
 			//routine
 			fmt.Printf("executing dig for domain :  %s\n", domain)
 			cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
@@ -111,7 +111,7 @@ func queryDomains() {
 
 			wg.Done() //if we do for,and need to wait for group
 
-		}(domain)
+		}(d)
 	}
 
 	wg.Wait()
