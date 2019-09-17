@@ -103,8 +103,8 @@ func queryDomains() {
 		go func(domain string) {
 			//routine
 			fmt.Printf("executing dig for domain :  %s\n", domain)
-			cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-			//cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
+			//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
+			cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
 			out, err := cmd.CombinedOutput()
 			mutex.Lock()
 			queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
