@@ -120,8 +120,9 @@ func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 			out, err := cmd.CombinedOutput()
 			mutex.Lock()
 			queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
+			fmt.Printf("combined out:\n%s\n", string(out))
 			if err != nil {
-				fmt.Printf("cmd.Run() failed with %s\n", err)
+				fmt.Printf("'dig %v' failed with %s\n", digArgs,err);
 				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
 				queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
 			} else {
@@ -132,7 +133,6 @@ func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 			//fmt.Printf("elapsed %d ms\n", elapsed)
 			queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
 			mutex.Unlock()
-			fmt.Printf("combined out:\n%s\n", string(out))
 
 			<-sem     // removes an int from sem, allowing another to proceed
 			wg.Done() //if we do for,and need to wait for group
