@@ -10,12 +10,12 @@ metadata:
   name: kube-dns-checker
   namespace: monitor
   labels:
-    name: kube-dns-checker
+    app: kube-dns-checker
 spec:
   template:
     metadata:
       labels:
-        name: kube-dns-checker
+        app: kube-dns-checker
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/port: '8080'
