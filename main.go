@@ -88,31 +88,30 @@ func queryDomains() {
 
 	for _, domain := range domains {
 		wg.Add(1)
-		currentDomain := domain
 		go func() {
 			//routine
-			fmt.Printf("executing dig for domain :  %s\n", currentDomain)
+			fmt.Printf("executing dig for domain :  %s\n", domain)
 			cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
 			//cmd := exec.Command("dig", "+time=5", "+tries=1", currentDomain)
 			mutex.Lock()
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				fmt.Printf("cmd.Run() failed with %s\n", err)
-				querySuccess.With(prometheus.Labels{"domain": currentDomain}).Set(0)
-				queryFailCount.With(prometheus.Labels{"domain": currentDomain}).Inc()
+				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
+				queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
 			} else {
-				querySuccess.With(prometheus.Labels{"domain": currentDomain}).Set(1)
-				querySuccessCount.With(prometheus.Labels{"domain": currentDomain}).Inc()
+				querySuccess.With(prometheus.Labels{"domain": domain}).Set(1)
+				querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
 			}
 			elapsed := time.Since(now).Milliseconds()
 			fmt.Printf("elapsed %d ms\n", elapsed)
-			queryTime.With(prometheus.Labels{"domain": currentDomain}).Set(float64(elapsed))
+			queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
 			mutex.Unlock()
 			fmt.Printf("combined out:\n%s\n", string(out))
 
 			wg.Done() //if we do for,and need to wait for group
 
-		}()
+		}(domain)
 	}
 
 	wg.Wait()
