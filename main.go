@@ -20,6 +20,7 @@ import (
 )
 
 var mutex = &sync.Mutex{}
+
 //var domains = []string{"www.google.com", "www.cloudflare.com"}
 var domains = []string{"www.google.com"}
 
@@ -29,7 +30,6 @@ var digTimeout = 5 //seconds
 var digRetries = 1
 
 const MAX = 3
-
 
 var (
 	queryTime = promauto.NewGaugeVec(
@@ -94,6 +94,8 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryDomains() {
+
+	var timeout = getEnvAsInt("TIMEOUT", digTimeout);
 	now := time.Now()
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX)
@@ -104,7 +106,7 @@ func queryDomains() {
 			//routine
 			fmt.Printf("executing dig for domain :  %s\n", domain)
 			//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-			cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
+			cmd := exec.Command("dig", "+time="+timeout, "+tries=1", domain)
 			out, err := cmd.CombinedOutput()
 			mutex.Lock()
 			queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
@@ -122,7 +124,7 @@ func queryDomains() {
 			mutex.Unlock()
 			fmt.Printf("combined out:\n%s\n", string(out))
 
-			<-sem // removes an int from sem, allowing another to proceed
+			<-sem     // removes an int from sem, allowing another to proceed
 			wg.Done() //if we do for,and need to wait for group
 		}(d)
 	}
@@ -164,8 +166,6 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-
-
 
 	// Start Server
 	go func() {
