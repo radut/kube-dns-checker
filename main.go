@@ -95,7 +95,7 @@ func queryDomains() {
 			mutex.Lock()
 			out, err := cmd.CombinedOutput();
 			if err != nil {
-				fmt.Printf("cmd.Run() failed with %s\n", err)
+				fmt.Printf("cmd.Run() failed with %s\n", err);
 				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0);
 				queryFailCount.With(prometheus.Labels{"domain": domain}).Inc();
 			} else {
