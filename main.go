@@ -93,8 +93,8 @@ func queryDomains() {
 			fmt.Printf("executing dig for domain :  %s\n", domain)
 			cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
 			//cmd := exec.Command("dig", "+time=5", "+tries=1", currentDomain)
-			mutex.Lock()
 			out, err := cmd.CombinedOutput()
+			mutex.Lock()
 			if err != nil {
 				fmt.Printf("cmd.Run() failed with %s\n", err)
 				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
