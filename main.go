@@ -114,7 +114,7 @@ func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 			digArgs = append(digArgs, "+time="+strconv.Itoa(digTimeout));
 			digArgs = append(digArgs, "+tries="+strconv.Itoa(digRetries));
 			digArgs = append(digArgs, domain);
-			fmt.Printf("executing 'dig %v'\n", digArgs...);
+			fmt.Printf("executing 'dig %v'\n", digArgs);
 			//
 			cmd := exec.Command("dig", digArgs...);
 			out, err := cmd.CombinedOutput()
@@ -129,7 +129,7 @@ func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 				querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
 			}
 			elapsed := time.Since(now).Milliseconds()
-			fmt.Printf("elapsed %d ms\n", elapsed)
+			//fmt.Printf("elapsed %d ms\n", elapsed)
 			queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
 			mutex.Unlock()
 			fmt.Printf("combined out:\n%s\n", string(out))
@@ -166,8 +166,8 @@ func main() {
 		fmt.Printf("\tDNS Server : default\n");
 	}
 	fmt.Printf("\tDomains    : %v\n", domains)
-	fmt.Printf("\tDig Timeout: %v\n seconds", digTimeout)
-	fmt.Printf("\tDig Retries: %v\n seconds", digRetries)
+	fmt.Printf("\tDig Timeout: %v seconds\n", digTimeout)
+	fmt.Printf("\tDig Retries: %v seconds\n", digRetries)
 	fmt.Printf("\tInterval   : %d seconds\n", interval)
 	fmt.Printf("\n\n")
 	//
@@ -222,8 +222,9 @@ func starTimer(interval int, domains []string, useDnsServer bool, dnsServer stri
 	go func() {
 		for {
 			select {
-			case t := <-ticker.C:
-				fmt.Println("Tick at", t.Format(time.RFC3339))
+			//case t := <-ticker.C:
+			//fmt.Println("Tick at", t.Format(time.RFC3339))
+			case <-ticker.C:
 				queryDomains(domains, useDnsServer, dnsServer);
 			}
 		}
