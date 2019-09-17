@@ -20,8 +20,8 @@ import (
 )
 
 var mutex = &sync.Mutex{}
-var domains = []string{"www.google.com", "www.cloudflare.com"}
-//var domains = []string{"www.google.com"}
+//var domains = []string{"www.google.com", "www.cloudflare.com"}
+var domains = []string{"www.google.com"}
 
 var interval = 3   //seconds
 var period = 15    //seconds
