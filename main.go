@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,6 +18,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+var mutex = &sync.Mutex{}
+var domain = "www.google.com";
+
+var interval = 3; //seconds
+var period = 1;   //minute
 
 var (
 	queryTime = promauto.NewGaugeVec(
@@ -35,10 +40,21 @@ var (
 		},
 		[]string{"domain"},
 	)
+	querySuccessCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "dns_query_success_count",
+			Help: "DNS queries success count",
+		},
+		[]string{"domain"},
+	)
+	queryFailCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "dns_query_fail_count",
+			Help: "DNS queries fail count",
+		},
+		[]string{"domain"},
+	)
 )
-var domain = "www.google.com";
-
-var mutex = &sync.Mutex{}
 
 //func handler(w http.ResponseWriter, r *http.Request) {
 //	query := r.URL.Query()
@@ -80,7 +96,7 @@ func queryDomain() {
 		} else {
 			querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
 		}
-		elapsed := int(math.Round(float64(time.Since(now) / 1_000_000)));
+		elapsed := time.Since(now).Milliseconds();
 		fmt.Printf("elapsed %d ms\n", elapsed)
 		queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
 		mutex.Unlock()
@@ -120,13 +136,13 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	var interval = getEnvAsInt("INTERVAL", 3000)
+	var interval = getEnvAsInt("INTERVAL", interval) * 1000;
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 	go func() {
 		for {
 			select {
 			case t := <-ticker.C:
-				fmt.Println("Tick at", t)
+				fmt.Println("Tick at", t.Format(time.RFC3339))
 				queryDomain();
 			}
 		}
