@@ -38,6 +38,8 @@ var (
 )
 var domain = "www.google.com";
 
+var mutex = &sync.Mutex{}
+
 //func handler(w http.ResponseWriter, r *http.Request) {
 //	query := r.URL.Query()
 //	name := query.Get("name")
@@ -48,6 +50,12 @@ var domain = "www.google.com";
 //	w.Write([]byte(fmt.Sprintf("Hello, %s\n", name)))
 //}
 
+func metricsHandler(w http.ResponseWriter, r *http.Request) {
+	mutex.Lock()
+	h := promhttp.Handler();
+	h.ServeHTTP(w, r);
+	mutex.Unlock()
+}
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
@@ -64,6 +72,7 @@ func queryDomain() {
 		//routine
 		//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
 		cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
+		mutex.Lock()
 		out, err := cmd.CombinedOutput();
 		if err != nil {
 			fmt.Printf("cmd.Run() failed with %s\n", err)
@@ -74,6 +83,7 @@ func queryDomain() {
 		elapsed := int(math.Round(float64(time.Since(now) / 1_000_000)));
 		fmt.Printf("elapsed %d ms\n", elapsed)
 		queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
+		mutex.Unlock()
 		fmt.Printf("combined out:\n%s\n", string(out))
 
 		wg.Done() //if we do for,and need to wait for group
@@ -92,7 +102,7 @@ func queryDomain() {
 }
 
 func main() {
-	go func(){
+	go func() {
 		queryDomain();
 	}()
 
@@ -102,7 +112,7 @@ func main() {
 	//r.HandleFunc("/", handler)
 	r.HandleFunc("/live", healthHandler)
 	r.HandleFunc("/ready", readinessHandler)
-	r.Handle("/metrics", promhttp.Handler())
+	r.HandleFunc("/metrics", metricsHandler)
 
 	srv := &http.Server{
 		Handler:      r,
