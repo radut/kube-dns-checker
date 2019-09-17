@@ -28,6 +28,9 @@ var period = 15    //seconds
 var digTimeout = 5 //seconds
 var digRetries = 1
 
+const MAX = 20
+
+
 var (
 	queryTime = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -93,7 +96,8 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 func queryDomains() {
 	now := time.Now()
 	var wg sync.WaitGroup
-
+	sem := make(chan int, MAX)
+	sem <- 1 // will block if there is MAX ints in sem
 	for _, d := range domains {
 		wg.Add(1)
 		go func(domain string) {
@@ -118,8 +122,8 @@ func queryDomains() {
 			mutex.Unlock()
 			fmt.Printf("combined out:\n%s\n", string(out))
 
+			<-sem // removes an int from sem, allowing another to proceed
 			wg.Done() //if we do for,and need to wait for group
-
 		}(d)
 	}
 
