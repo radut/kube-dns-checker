@@ -1,3 +1,14 @@
+### Motivation
+* kube-dns is the most important component of a kubernetes cluster, therefore it needs to be working all time.
+* If there is a problem with either of the nodes, dns-pods, misconfigured network, or routing issues -> kube-dns service -> kube-dns pods you must know about it
+* trigger alerts based on error rate.
+
+
+* container:8080/metrics, already has prometheus annotaitons so will be scraped automatically
+* sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,node_ip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,node_ip,job) * 100 > 0
+* check kuberentes/alert.rules 
+
+
 ### How To
 ```bash
 
@@ -22,3 +33,5 @@ docker push radut/kube-dns-checker
 `INTERVAL`     interval to run checks(in seconds) default 3
   
 ```
+ 
+ 
