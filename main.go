@@ -42,6 +42,13 @@ var (
 		},
 		[]string{"domain"},
 	)
+	queryTotalCount = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "dns_query_total_count",
+			Help: "DNS queries total count",
+		},
+		[]string{"domain"},
+	)
 	querySuccessCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_success_count",
@@ -95,6 +102,7 @@ func queryDomains() {
 			cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
 			out, err := cmd.CombinedOutput()
 			mutex.Lock()
+			queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
 			if err != nil {
 				fmt.Printf("cmd.Run() failed with %s\n", err)
 				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
@@ -127,7 +135,7 @@ func queryDomains() {
 
 func main() {
 	resetCounters()
-	 //getEnvAsInt("RETRIES",)
+	//getEnvAsInt("RETRIES",)
 	fmt.Printf("Using Config:\n")
 	fmt.Printf("\tdomains: %v\n", domains)
 	fmt.Printf("\tinterval: %d seconds\n", interval)
@@ -190,6 +198,7 @@ func resetCounters() {
 	mutex.Lock()
 
 	for _, domain := range domains {
+		queryTotalCount.With(prometheus.Labels{"domain": domain}).Set(0)
 		querySuccessCount.With(prometheus.Labels{"domain": domain}).Set(0)
 		queryFailCount.With(prometheus.Labels{"domain": domain}).Set(0)
 	}
