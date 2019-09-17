@@ -20,12 +20,12 @@ import (
 )
 
 var mutex = &sync.Mutex{}
-var domains = []string{"www.google.com", "www.cloudflare.com"};
+var domains = []string{"www.google.com", "www.cloudflare.com"}
 
-var interval = 3;   //seconds
-var period = 15;    //seconds
-var digTimeout = 5; //seconds
-var digRetries = 1;
+var interval = 3   //seconds
+var period = 15    //seconds
+var digTimeout = 5 //seconds
+var digRetries = 1
 
 var (
 	queryTime = promauto.NewGaugeVec(
@@ -70,8 +70,8 @@ var (
 
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
-	h := promhttp.Handler();
-	h.ServeHTTP(w, r);
+	h := promhttp.Handler()
+	h.ServeHTTP(w, r)
 	mutex.Unlock()
 }
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -88,23 +88,25 @@ func queryDomains() {
 
 	for _, domain := range domains {
 		wg.Add(1)
+		currentDomain := domain
 		go func() {
 			//routine
-			//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-			cmd := exec.Command("dig", "+time=5", "+tries=1", domain)
+			fmt.Printf("executing dig for domain :  %s\n", currentDomain)
+			cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
+			//cmd := exec.Command("dig", "+time=5", "+tries=1", currentDomain)
 			mutex.Lock()
-			out, err := cmd.CombinedOutput();
+			out, err := cmd.CombinedOutput()
 			if err != nil {
-				fmt.Printf("cmd.Run() failed with %s\n", err);
-				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0);
-				queryFailCount.With(prometheus.Labels{"domain": domain}).Inc();
+				fmt.Printf("cmd.Run() failed with %s\n", err)
+				querySuccess.With(prometheus.Labels{"domain": currentDomain}).Set(0)
+				queryFailCount.With(prometheus.Labels{"domain": currentDomain}).Inc()
 			} else {
-				querySuccess.With(prometheus.Labels{"domain": domain}).Set(1);
-				querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc();
+				querySuccess.With(prometheus.Labels{"domain": currentDomain}).Set(1)
+				querySuccessCount.With(prometheus.Labels{"domain": currentDomain}).Inc()
 			}
-			elapsed := time.Since(now).Milliseconds();
+			elapsed := time.Since(now).Milliseconds()
 			fmt.Printf("elapsed %d ms\n", elapsed)
-			queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed));
+			queryTime.With(prometheus.Labels{"domain": currentDomain}).Set(float64(elapsed))
 			mutex.Unlock()
 			fmt.Printf("combined out:\n%s\n", string(out))
 
@@ -125,13 +127,13 @@ func queryDomains() {
 }
 
 func main() {
-	resetCounters();
+	resetCounters()
 	//getEnvAsInt("RETRIES",)
-	fmt.Printf("Using Config:\n", )
-	fmt.Printf("\tdomains: %v\n", domains);
-	fmt.Printf("\tinterval: %d seconds\n", interval);
+	fmt.Printf("Using Config:\n")
+	fmt.Printf("\tdomains: %v\n", domains)
+	fmt.Printf("\tinterval: %d seconds\n", interval)
 	go func() {
-		queryDomains();
+		queryDomains()
 	}()
 
 	// Create Server and Route Handlers
@@ -148,14 +150,14 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	var interval = getEnvAsInt("INTERVAL", interval) * 1000;
+	var interval = getEnvAsInt("INTERVAL", interval) * 1000
 	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
 	go func() {
 		for {
 			select {
 			case t := <-ticker.C:
 				fmt.Println("Tick at", t.Format(time.RFC3339))
-				queryDomains();
+				queryDomains()
 			}
 		}
 	}()
@@ -188,8 +190,8 @@ func resetCounters() {
 	mutex.Lock()
 
 	for _, domain := range domains {
-		querySuccessCount.With(prometheus.Labels{"domain": domain}).Set(0);
-		queryFailCount.With(prometheus.Labels{"domain": domain}).Set(0);
+		querySuccessCount.With(prometheus.Labels{"domain": domain}).Set(0)
+		queryFailCount.With(prometheus.Labels{"domain": domain}).Set(0)
 	}
 
 	mutex.Unlock()
