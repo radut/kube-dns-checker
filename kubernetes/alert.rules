@@ -1,0 +1,4 @@
+sum(rate(dns_query_fail_count[5m])) by (domain,app,kubernetes_node,kubernetes_pod_name) / sum(rate(dns_query_total_count[5m])) by (domain,app,kubernetes_node,kubernetes_pod_name) > 0
+
+sum(rate(dns_query_fail_count[5m])) by (domain) / sum(rate(dns_query_total_count[5m])) by (domain) > 0
+sum(rate(dns_query_fail_count[5m])) by (domain,kubernetes_node) / sum(rate(dns_query_total_count[5m])) by (domain,kubernetes_node) > 0
