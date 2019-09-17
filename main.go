@@ -111,6 +111,9 @@ func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 			if (useDnsServer) {
 				digArgs = append(digArgs, "@"+dnsServer);
 			}
+			digArgs = append(digArgs, "+noall");
+			digArgs = append(digArgs, "+answer");
+			digArgs = append(digArgs, "+stats");
 			digArgs = append(digArgs, "+time="+strconv.Itoa(digTimeout));
 			digArgs = append(digArgs, "+tries="+strconv.Itoa(digRetries));
 			digArgs = append(digArgs, domain);
