@@ -127,10 +127,11 @@ func queryDomains() {
 
 func main() {
 	resetCounters()
-	//getEnvAsInt("RETRIES",)
+	 //getEnvAsInt("RETRIES",)
 	fmt.Printf("Using Config:\n")
 	fmt.Printf("\tdomains: %v\n", domains)
 	fmt.Printf("\tinterval: %d seconds\n", interval)
+
 	go func() {
 		queryDomains()
 	}()
