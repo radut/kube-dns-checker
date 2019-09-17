@@ -1,9 +1,4 @@
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitor
----
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
