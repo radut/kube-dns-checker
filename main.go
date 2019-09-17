@@ -114,7 +114,7 @@ func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
 			digArgs = append(digArgs, "+time="+strconv.Itoa(digTimeout));
 			digArgs = append(digArgs, "+tries="+strconv.Itoa(digRetries));
 			digArgs = append(digArgs, domain);
-			fmt.Printf("executing 'dig %v'\n", digArgs)
+			fmt.Printf("executing 'dig %v'\n", digArgs...);
 			//
 			cmd := exec.Command("dig", digArgs...);
 			out, err := cmd.CombinedOutput()
@@ -166,8 +166,8 @@ func main() {
 		fmt.Printf("\tDNS Server : default\n");
 	}
 	fmt.Printf("\tDomains    : %v\n", domains)
-	fmt.Printf("\tDig Timeout: %v\n", digTimeout)
-	fmt.Printf("\tDig Retries: %v\n", digRetries)
+	fmt.Printf("\tDig Timeout: %v\n seconds", digTimeout)
+	fmt.Printf("\tDig Retries: %v\n seconds", digRetries)
 	fmt.Printf("\tInterval   : %d seconds\n", interval)
 	fmt.Printf("\n\n")
 	//

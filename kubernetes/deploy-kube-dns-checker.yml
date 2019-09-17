@@ -39,6 +39,12 @@ spec:
       containers:
         - name: kube-dns-checker
           image: radut/kube-dns-checker
+          imagePullPolicy: Always
+          env:
+            - name: DOMAINS
+              value: "www.google.com"
+            - name: DNS_SERVER
+              value: "10.233.0.3"
           ports:
             - containerPort: 8080
               protocol: TCP
