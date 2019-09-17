@@ -3,3 +3,8 @@ sum(rate(dns_query_fail_count[1m])) by (domain,app,kubernetes_node,kubernetes_po
 sum(rate(dns_query_fail_count[1m])) by (domain) / sum(rate(dns_query_total_count[1m])) by (domain) > 0
 
 sum(rate(dns_query_fail_count[1m])) by (kubernetes_node) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node) > 0.1
+
+
+
+
+sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,job) * 100 > 30
