@@ -28,8 +28,8 @@ spec:
               cpu: 100m
               memory: 10Mi
             requests:
-              cpu: 10m
-              memory: 10Mi
+              cpu: 50m
+              memory: 50Mi
       tolerations:
         - effect: NoSchedule
           operator: Exists
