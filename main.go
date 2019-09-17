@@ -22,8 +22,10 @@ import (
 var mutex = &sync.Mutex{}
 var domains = []string{"www.google.com", "www.cloudflare.com"};
 
-var interval = 3; //seconds
-var period = 15;  //seconds
+var interval = 3;   //seconds
+var period = 15;    //seconds
+var digTimeout = 5; //seconds
+var digRetries = 1;
 
 var (
 	queryTime = promauto.NewGaugeVec(
@@ -80,7 +82,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func queryDomain() {
+func queryDomains() {
 	now := time.Now()
 	var wg sync.WaitGroup
 
@@ -124,12 +126,12 @@ func queryDomain() {
 
 func main() {
 	resetCounters();
-	fmt.Printf("Using Config:\n",)
-	fmt.Printf("\tdomains: %v\n",domains);
-	fmt.Printf("\tinterval: %d seconds\n",interval);
-
+	getEnvAsInt("RETRIES",)
+	fmt.Printf("Using Config:\n", )
+	fmt.Printf("\tdomains: %v\n", domains);
+	fmt.Printf("\tinterval: %d seconds\n", interval);
 	go func() {
-		queryDomain();
+		queryDomains();
 	}()
 
 	// Create Server and Route Handlers
@@ -153,7 +155,7 @@ func main() {
 			select {
 			case t := <-ticker.C:
 				fmt.Println("Tick at", t.Format(time.RFC3339))
-				queryDomain();
+				queryDomains();
 			}
 		}
 	}()
