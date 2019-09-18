@@ -17,16 +17,7 @@ groups:
 
   - alert: Kubernetes DNS
     expr: sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,node_ip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,node_ip,job) * 100 > 0
-    for: 1m
-    labels:
-      severity: warning
-    annotations:
-      summary: "Kubernetes DNS is not working properly"
-      description: "Kubernetes DNS: {{ humanize $value}}% of queries are failing for pods scheduled on node {{$labels.kubernetes_node}}@{{$labels.node_ip}} of job {{ $labels.job }}"
-
-  - alert: Kubernetes DNS
-    expr: sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,node_ip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,node_ip,job) * 100 > 20
-    for: 1m
+    for: 30s
     labels:
       severity: critical
     annotations:
