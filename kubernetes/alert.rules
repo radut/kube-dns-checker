@@ -7,7 +7,7 @@ sum(rate(dns_query_fail_count[1m])) by (kubernetes_node) / sum(rate(dns_query_to
 
 
 
-sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,job) * 100 > 30
+sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,job) * 100 > 5
 
 
 
@@ -16,7 +16,7 @@ groups:
   rules:
 
   - alert: Kubernetes DNS
-    expr: sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,node_ip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,node_ip,job) * 100 > 0
+    expr: sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,node_ip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,node_ip,job) * 100 > 5
     for: 30s
     labels:
       severity: critical
