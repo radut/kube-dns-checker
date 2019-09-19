@@ -15,49 +15,49 @@ cache:
 #    - .m2/repository/
 
 
-stages:
-  - build
-  - push
-
-docker_io:
-  image: google/cloud-sdk:latest
-  stage: push
-  cache: {}
-  artifacts: {}
-  allow_failure: false
-  script:
-    - export IMAGE_TAG=`echo ${CI_COMMIT_REF_SLUG} | sed 's|^master$|latest|g'`
-    - export IMAGE=${DOCKERIO_USER}/${PROJECT_NAME}:${IMAGE_TAG}
-    - echo "Image Name = ${IMAGE}"
-    - docker login -u ${DOCKERIO_USER} --password ${DOCKERIO_PASSWORD}
-    - docker build -t ${IMAGE} .
-    - docker push ${IMAGE}
-
-gitlab_registry:
-  image: google/cloud-sdk:latest
-  stage: push
-  cache: {}
-  artifacts: {}
-  allow_failure: false
-  script:
-    - export IMAGE_TAG=`echo ${CI_COMMIT_REF_SLUG} | sed 's|^master$|latest|g'`
-    - export IMAGE=${CI_REGISTRY}/${CI_PROJECT_NAMESPACE,,}/${CI_PROJECT_NAME,,}:${IMAGE_TAG}
-    - echo "Image Name = ${IMAGE}"
-    - docker login -u ${CI_REGISTRY_USER} --password ${CI_REGISTRY_PASSWORD}  ${CI_REGISTRY}
-    - docker build -t ${IMAGE} .
-    - docker push ${IMAGE}
-
-nexus:
-  image: google/cloud-sdk:latest
-  stage: push
-  cache: {}
-  artifacts: {}
-  allow_failure: false
-  script:
-    - export IMAGE_TAG=`echo ${CI_COMMIT_REF_SLUG} | sed 's|^master$|latest|g'`
-    - export IMAGE=${NEXUS_REGISTRY}/${PROJECT_NAME}:${IMAGE_TAG}
-    - echo "Image Name = ${IMAGE}"
-    - docker login -u ${DOCKER_USER} --password ${DOCKER_PASSWORD} ${NEXUS_REGISTRY}
-    - docker build -t ${IMAGE} .
-    - docker push ${IMAGE}
+#stages:
+#  - build
+#  - push
+#
+#docker_io:
+#  image: google/cloud-sdk:latest
+#  stage: push
+#  cache: {}
+#  artifacts: {}
+#  allow_failure: false
+#  script:
+#    - export IMAGE_TAG=`echo ${CI_COMMIT_REF_SLUG} | sed 's|^master$|latest|g'`
+#    - export IMAGE=${DOCKERIO_USER}/${PROJECT_NAME}:${IMAGE_TAG}
+#    - echo "Image Name = ${IMAGE}"
+#    - docker login -u ${DOCKERIO_USER} --password ${DOCKERIO_PASSWORD}
+#    - docker build -t ${IMAGE} .
+#    - docker push ${IMAGE}
+#
+#gitlab_registry:
+#  image: google/cloud-sdk:latest
+#  stage: push
+#  cache: {}
+#  artifacts: {}
+#  allow_failure: false
+#  script:
+#    - export IMAGE_TAG=`echo ${CI_COMMIT_REF_SLUG} | sed 's|^master$|latest|g'`
+#    - export IMAGE=${CI_REGISTRY}/${CI_PROJECT_NAMESPACE,,}/${CI_PROJECT_NAME,,}:${IMAGE_TAG}
+#    - echo "Image Name = ${IMAGE}"
+#    - docker login -u ${CI_REGISTRY_USER} --password ${CI_REGISTRY_PASSWORD}  ${CI_REGISTRY}
+#    - docker build -t ${IMAGE} .
+#    - docker push ${IMAGE}
+#
+#nexus:
+#  image: google/cloud-sdk:latest
+#  stage: push
+#  cache: {}
+#  artifacts: {}
+#  allow_failure: false
+#  script:
+#    - export IMAGE_TAG=`echo ${CI_COMMIT_REF_SLUG} | sed 's|^master$|latest|g'`
+#    - export IMAGE=${NEXUS_REGISTRY}/${PROJECT_NAME}:${IMAGE_TAG}
+#    - echo "Image Name = ${IMAGE}"
+#    - docker login -u ${DOCKER_USER} --password ${DOCKER_PASSWORD} ${NEXUS_REGISTRY}
+#    - docker build -t ${IMAGE} .
+#    - docker push ${IMAGE}
 
