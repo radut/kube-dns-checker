@@ -34,8 +34,8 @@ spec:
               cpu: 10m
               memory: 10Mi
             limits:
-              cpu: 80m
-              memory: 80Mi
+              cpu: 10m
+              memory: 30Mi
           readinessProbe:
             httpGet:
               path: /ready
