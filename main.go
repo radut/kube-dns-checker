@@ -25,7 +25,7 @@ var mutex = &sync.Mutex{}
 //var default_domains = "www.google.com,www.cloudflare.com";
 var default_domains = "www.google.com";
 
-var default_interval = "3s"
+var default_interval = "5s"
 var default_timeout = "5s"
 
 const MAX_CONCURRENT = 5
@@ -96,10 +96,10 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX_CONCURRENT)
-	sem <- 1 // will block if there is MAX_CONCURRENT ints in sem
 	for _, d := range domains {
 		for _, n := range dnsServers {
 			wg.Add(1)
+			sem <- 1 // will block if there is MAX_CONCURRENT ints in sem
 			go func(domain string, nameserver string) {
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
@@ -151,6 +151,8 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 	}
 
 	wg.Wait()
+	fmt.Printf("\n")
+
 
 }
 
@@ -183,11 +185,7 @@ func main() {
 	resetCounters(domains, dnsServers);
 	//
 	time.Sleep(1 * time.Second);
-	//
-	go func() {
-		defer starTimer(interval, domains, dnsServers, timeout);
-		queryDomains(domains, dnsServers, timeout);
-	}()
+
 
 	// Create Server and Route Handlers
 	httpRouter := mux.NewRouter()
@@ -219,6 +217,12 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatal(err)
 		}
+	}()
+	
+	//
+	go func() {
+		defer starTimer(interval, domains, dnsServers, timeout);
+		queryDomains(domains, dnsServers, timeout);
 	}()
 
 	// Graceful Shutdown
