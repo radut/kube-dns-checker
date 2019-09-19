@@ -125,25 +125,19 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 				ctx, _ := context.WithTimeout(context.Background(), timeout);
 				ips, err := resolver.LookupIPAddr(ctx, domain)
 				elapsed := time.Since(now);
-				fmt.Printf("Lookup Done 'dnsServer=%v domain=%v' : took %v -> %v / err=%v\n", nameserver, domain, elapsed, ips, err);
+				fmt.Printf("Lookup Done  'dnsServer=%v domain=%v' : took %v -> %v / err=%v\n", nameserver, domain, elapsed, ips, err);
 				mutex.Lock()
-				//
-				//cmd := exec.Command("dig", digArgs...);
-				//out, err := cmd.CombinedOutput()
-				//
-				//queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
-				//fmt.Printf("combined out:\n%s\n", string(out))
-				//if err != nil {
-				//	fmt.Printf("'dig %v' failed with %s\n", digArgs, err);
-				//	querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
-				//	queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
-				//} else {
-				//	querySuccess.With(prometheus.Labels{"domain": domain}).Set(1)
-				//	querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
-				//}
 
-				//fmt.Printf("elapsed %d ms\n", elapsed)
-				queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
+				queryTotalCount.With(prometheus.Labels{"dns_server":nameserver,"domain": domain}).Inc()
+				if err != nil {
+					querySuccess.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
+					queryFailCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
+				} else {
+					querySuccess.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(1)
+					querySuccessCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
+				}
+
+				queryTime.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(float64(elapsed))
 				mutex.Unlock()
 
 				<-sem     // removes an int from sem, allowing another to proceed
