@@ -108,7 +108,8 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 					var ip = net.ParseIP(nameserver);
 					if (ip == nil) {
 						log.Printf("skipping invalid nameserver: `%s`\n", nameserver)
-						wg.Done();
+						<-sem     // removes an int from sem, allowing another to proceed
+						wg.Done() //if we do for,and need to wait for group
 						return;
 					}
 					resolver = &net.Resolver{
