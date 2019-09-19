@@ -121,14 +121,14 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 					}
 				}
 				now := time.Now()
-				fmt.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
+				log.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
 				ctx, _ := context.WithTimeout(context.Background(), timeout);
 				ips, err := resolver.LookupIPAddr(ctx, domain)
 				elapsed := time.Since(now);
 				if err == nil {
-					fmt.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%v\n", nameserver, domain, elapsed, ips);
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%v\n", nameserver, domain, elapsed, ips);
 				} else {
-					fmt.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
+					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
 				}
 				mutex.Lock()
 
@@ -151,7 +151,7 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 	}
 
 	wg.Wait()
-	fmt.Printf("\n")
+	fmt.Printf("\n");
 
 
 }
@@ -162,12 +162,12 @@ func main() {
 	//
 	var timeout, timeoutErr = time.ParseDuration(timeoutStr);
 	if (timeoutErr != nil) {
-		log.Printf("Invalid TIMEOUT duration : `%s`", timeoutStr)
+		fmt.Printf("Invalid TIMEOUT duration : `%s`", timeoutStr)
 		log.Fatal(timeoutErr);
 	}
 	var interval, intervalErr = time.ParseDuration(intervalStr);
 	if (intervalErr != nil) {
-		log.Printf("Invalid INTERVAL duration : `%s`", intervalStr)
+		fmt.Printf("Invalid INTERVAL duration : `%s`", intervalStr)
 		log.Fatal(intervalErr);
 	}
 	var domainsStr = getEnv("DOMAINS", default_domains)
@@ -218,7 +218,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	
+
 	//
 	go func() {
 		defer starTimer(interval, domains, dnsServers, timeout);
