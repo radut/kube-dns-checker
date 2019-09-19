@@ -141,7 +141,7 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 					querySuccessCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Inc()
 				}
 
-				queryTime.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(float64(elapsed))
+				queryTime.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(float64(elapsed.Milliseconds()))
 				mutex.Unlock()
 
 				<-sem     // removes an int from sem, allowing another to proceed
