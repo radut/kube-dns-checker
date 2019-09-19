@@ -101,7 +101,6 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 		for _, n := range dnsServers {
 			wg.Add(1)
 			go func(domain string, nameserver string) {
-
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
 					resolver = net.DefaultResolver
@@ -125,10 +124,14 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 				ctx, _ := context.WithTimeout(context.Background(), timeout);
 				ips, err := resolver.LookupIPAddr(ctx, domain)
 				elapsed := time.Since(now);
-				fmt.Printf("Lookup Done  'dnsServer=%v domain=%v' : took %v -> %v / err=%v\n", nameserver, domain, elapsed, ips, err);
+				if err == nil {
+					fmt.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%v\n", nameserver, domain, elapsed, ips);
+				} else {
+					fmt.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
+				}
 				mutex.Lock()
 
-				queryTotalCount.With(prometheus.Labels{"dns_server":nameserver,"domain": domain}).Inc()
+				queryTotalCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
 				if err != nil {
 					querySuccess.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
 					queryFailCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
@@ -178,7 +181,7 @@ func main() {
 
 	resetCounters(domains, dnsServers);
 	//
-	time.Sleep(2 * time.Second);
+	time.Sleep(3 * time.Second);
 	//
 	go func() {
 		defer starTimer(interval, domains, dnsServers, timeout);
