@@ -36,35 +36,35 @@ var (
 			Name: "dns_query_time_ms",
 			Help: "Time taken for dns query in milliseconds",
 		},
-		[]string{"dns_server", "domain"},
+		[]string{"nameserver", "domain"},
 	)
 	querySuccess = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_success",
 			Help: "DNS responded OK(1) or NOT OK/Timeout(0)",
 		},
-		[]string{"dns_server", "domain"},
+		[]string{"nameserver", "domain"},
 	)
 	queryTotalCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_total_count",
 			Help: "DNS queries total count",
 		},
-		[]string{"dns_server", "domain"},
+		[]string{"nameserver", "domain"},
 	)
 	querySuccessCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_success_count",
 			Help: "DNS queries success count",
 		},
-		[]string{"dns_server", "domain"},
+		[]string{"nameserver", "domain"},
 	)
 	queryFailCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_fail_count",
 			Help: "DNS queries fail count",
 		},
-		[]string{"dns_server", "domain"},
+		[]string{"nameserver", "domain"},
 	)
 )
 
@@ -131,16 +131,16 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 				}
 				mutex.Lock()
 
-				queryTotalCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
+				queryTotalCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Inc()
 				if err != nil {
-					querySuccess.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
-					queryFailCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
+					querySuccess.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
+					queryFailCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Inc()
 				} else {
-					querySuccess.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(1)
-					querySuccessCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Inc()
+					querySuccess.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(1)
+					querySuccessCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Inc()
 				}
 
-				queryTime.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(float64(elapsed))
+				queryTime.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(float64(elapsed))
 				mutex.Unlock()
 
 				<-sem     // removes an int from sem, allowing another to proceed
@@ -168,12 +168,12 @@ func main() {
 		log.Fatal(intervalErr);
 	}
 	var domainsStr = getEnv("DOMAINS", default_domains)
-	var dnsServersStr = getEnv("DNS_SERVERS", "DEFAULT");
+	var dnsServersStr = getEnv("NAMESERVERS", "DEFAULT");
 	var domains = strings.Split(strings.ReplaceAll(domainsStr, " ", ""), ",");
 	var dnsServers = strings.Split(strings.ReplaceAll(dnsServersStr, " ", ""), ",");
 	//
 	fmt.Printf("Using Config :\n")
-	fmt.Printf("\tDNS Servers : %v\n", dnsServers)
+	fmt.Printf("\tNAMESERVERS : %v\n", dnsServers)
 	fmt.Printf("\tDomains     : %v\n", domains)
 	fmt.Printf("\tTimeout     : %v \n", timeout)
 	fmt.Printf("\tInterval    : %v \n", interval)
@@ -181,7 +181,7 @@ func main() {
 
 	resetCounters(domains, dnsServers);
 	//
-	time.Sleep(3 * time.Second);
+	time.Sleep(1 * time.Second);
 	//
 	go func() {
 		defer starTimer(interval, domains, dnsServers, timeout);
@@ -244,9 +244,9 @@ func resetCounters(domains []string, dnsServers []string) {
 
 	for _, domain := range domains {
 		for _, nameserver := range domains {
-			queryTotalCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
-			querySuccessCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
-			queryFailCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
+			queryTotalCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
+			querySuccessCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
+			queryFailCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
 		}
 	}
 
