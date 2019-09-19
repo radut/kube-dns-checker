@@ -124,7 +124,7 @@ func queryDomains(domains []string, dnsServers []string, timeout time.Duration) 
 				fmt.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
 				ctx, _ := context.WithTimeout(context.Background(), timeout);
 				ips, err := resolver.LookupIPAddr(ctx, domain)
-				elapsed := time.Since(now).Milliseconds()
+				elapsed := time.Since(now);
 				fmt.Printf("Lookup Done 'dnsServer=%v domain=%v' : took %v -> %v / err=%v\n", nameserver, domain, elapsed, ips, err);
 				mutex.Lock()
 				//
