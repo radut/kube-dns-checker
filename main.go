@@ -5,12 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os/exec"
-
-	//"net"
 	"net/http"
 	"os"
-	//"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -96,7 +92,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func queryDomains(domains []string, dnsServers []string, timeout Duration) {
+func queryDomains(domains []string, dnsServers []string, timeout time.Duration) {
 
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX_CONCURRENT)
@@ -105,7 +101,7 @@ func queryDomains(domains []string, dnsServers []string, timeout Duration) {
 		for _, n := range dnsServers {
 			wg.Add(1)
 			go func(domain string, nameserver string) {
-				now := time.Now()
+
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
 					resolver = net.DefaultResolver
@@ -124,26 +120,28 @@ func queryDomains(domains []string, dnsServers []string, timeout Duration) {
 						},
 					}
 				}
+				now := time.Now()
 				fmt.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
 				ctx, _ := context.WithTimeout(context.Background(), timeout);
 				ips, err := resolver.LookupIPAddr(ctx, domain)
-				mutex.Lock()
-				fmt.Printf("Lookup Done 'dnsServer=%v domain=%v'\n -> %v / err=%v", nameserver, domain, ips, err);
-				//
-				cmd := exec.Command("dig", digArgs...);
-				out, err := cmd.CombinedOutput()
-
-				queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
-				fmt.Printf("combined out:\n%s\n", string(out))
-				if err != nil {
-					fmt.Printf("'dig %v' failed with %s\n", digArgs, err);
-					querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
-					queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
-				} else {
-					querySuccess.With(prometheus.Labels{"domain": domain}).Set(1)
-					querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
-				}
 				elapsed := time.Since(now).Milliseconds()
+				fmt.Printf("Lookup Done 'dnsServer=%v domain=%v' : took %v -> %v / err=%v\n", nameserver, domain, elapsed, ips, err);
+				mutex.Lock()
+				//
+				//cmd := exec.Command("dig", digArgs...);
+				//out, err := cmd.CombinedOutput()
+				//
+				//queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
+				//fmt.Printf("combined out:\n%s\n", string(out))
+				//if err != nil {
+				//	fmt.Printf("'dig %v' failed with %s\n", digArgs, err);
+				//	querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
+				//	queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
+				//} else {
+				//	querySuccess.With(prometheus.Labels{"domain": domain}).Set(1)
+				//	querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
+				//}
+
 				//fmt.Printf("elapsed %d ms\n", elapsed)
 				queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
 				mutex.Unlock()
