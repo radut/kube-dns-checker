@@ -26,11 +26,11 @@ docker push radut/kube-dns-checker
 
 ### Environment Variables
 ```config
-`DNS_SERVER`   which dns server to query, default empty, goes to default from /etc/resolv.conf
-`DOMAINS`      comma separated domains example "www.google.com,www.cloudflare.com", default value "www.google.com"
-`TIMEOUT`      dig timeout in seconds, default 5
-`TRIES`        dig tries, default 1
-`INTERVAL`     interval to run checks(in seconds) default 3
+`DNS_SERVERS`    comma separated servers which are being used to query, default values "DEFAULT", which interogates the server from /etc/resolv.conf. 
+`DOMAINS`        comma separated domains example "www.google.com,www.cloudflare.com", default value "www.google.com"
+`TIMEOUT`        dig timeout in seconds, default 5
+`TRIES`          dig tries, default 1
+`INTERVAL`       interval to run checks(in seconds) default 3
   
 ```
  

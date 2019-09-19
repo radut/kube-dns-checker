@@ -43,8 +43,8 @@ spec:
           env:
             - name: DOMAINS
               value: "www.google.com"
-#            - name: DNS_SERVER
-#              value: "10.233.0.3"
+            - name: DNS_SERVERS
+              value: "DEFAULT,10.233.0.3"
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -53,8 +53,8 @@ spec:
               cpu: 10m
               memory: 10Mi
             limits:
-              cpu: 50m
-              memory: 50Mi
+              cpu: 80m
+              memory: 80Mi
           readinessProbe:
             httpGet:
               path: /ready

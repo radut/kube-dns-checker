@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"os/exec"
+
+	//"net"
 	"net/http"
 	"os"
-	"os/exec"
+	//"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -25,12 +29,10 @@ var mutex = &sync.Mutex{}
 //var default_domains = "www.google.com,www.cloudflare.com";
 var default_domains = "www.google.com";
 
-var default_interval = 3   //seconds
-var default_period = 15    //seconds
-var default_digTimeout = 5 //seconds
-var default_digRetries = 1
+var default_interval = "3s"
+var default_timeout = "5s"
 
-const MAX = 3
+const MAX_CONCURRENT = 5
 
 var (
 	queryTime = promauto.NewGaugeVec(
@@ -38,35 +40,35 @@ var (
 			Name: "dns_query_time_ms",
 			Help: "Time taken for dns query in milliseconds",
 		},
-		[]string{"domain"},
+		[]string{"dns_server", "domain"},
 	)
 	querySuccess = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_success",
 			Help: "DNS responded OK(1) or NOT OK/Timeout(0)",
 		},
-		[]string{"domain"},
+		[]string{"dns_server", "domain"},
 	)
 	queryTotalCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_total_count",
 			Help: "DNS queries total count",
 		},
-		[]string{"domain"},
+		[]string{"dns_server", "domain"},
 	)
 	querySuccessCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_success_count",
 			Help: "DNS queries success count",
 		},
-		[]string{"domain"},
+		[]string{"dns_server", "domain"},
 	)
 	queryFailCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "dns_query_fail_count",
 			Help: "DNS queries fail count",
 		},
-		[]string{"domain"},
+		[]string{"dns_server", "domain"},
 	)
 )
 
@@ -94,103 +96,122 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func queryDomains(domains []string, useDnsServer bool, dnsServer string) {
+func queryDomains(domains []string, dnsServers []string, timeout Duration) {
 
-	var digTimeout = getEnvAsInt("TIMEOUT", default_digTimeout);
-	var digRetries = getEnvAsInt("TRIES", default_digRetries);
-	now := time.Now()
 	var wg sync.WaitGroup
-	sem := make(chan int, MAX)
-	sem <- 1 // will block if there is MAX ints in sem
+	sem := make(chan int, MAX_CONCURRENT)
+	sem <- 1 // will block if there is MAX_CONCURRENT ints in sem
 	for _, d := range domains {
-		wg.Add(1)
-		go func(domain string) {
-			//routine
-			//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-			var digArgs = []string{};
-			if (useDnsServer) {
-				digArgs = append(digArgs, "@"+dnsServer);
-			}
-			digArgs = append(digArgs, "+noall");
-			digArgs = append(digArgs, "+answer");
-			digArgs = append(digArgs, "+stats");
-			digArgs = append(digArgs, "+time="+strconv.Itoa(digTimeout));
-			digArgs = append(digArgs, "+tries="+strconv.Itoa(digRetries));
-			digArgs = append(digArgs, domain);
-			fmt.Printf("executing 'dig %v'\n", digArgs);
-			//
-			cmd := exec.Command("dig", digArgs...);
-			out, err := cmd.CombinedOutput()
-			mutex.Lock()
-			queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
-			fmt.Printf("combined out:\n%s\n", string(out))
-			if err != nil {
-				fmt.Printf("'dig %v' failed with %s\n", digArgs,err);
-				querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
-				queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
-			} else {
-				querySuccess.With(prometheus.Labels{"domain": domain}).Set(1)
-				querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
-			}
-			elapsed := time.Since(now).Milliseconds()
-			//fmt.Printf("elapsed %d ms\n", elapsed)
-			queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
-			mutex.Unlock()
+		for _, n := range dnsServers {
+			wg.Add(1)
+			go func(domain string, nameserver string) {
+				now := time.Now()
+				var resolver *net.Resolver
+				if nameserver == "DEFAULT" {
+					resolver = net.DefaultResolver
+				} else {
+					var ip = net.ParseIP(nameserver);
+					if (ip == nil) {
+						log.Printf("skipping invalid nameserver: `%s`\n", nameserver)
+						wg.Done();
+						return;
+					}
+					resolver = &net.Resolver{
+						PreferGo: true,
+						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+							d := net.Dialer{}
+							return d.DialContext(ctx, "udp", net.JoinHostPort(ip.String(), "53"))
+						},
+					}
+				}
+				fmt.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
+				ctx, _ := context.WithTimeout(context.Background(), timeout);
+				ips, err := resolver.LookupIPAddr(ctx, domain)
+				mutex.Lock()
+				fmt.Printf("Lookup Done 'dnsServer=%v domain=%v'\n -> %v / err=%v", nameserver, domain, ips, err);
+				//
+				cmd := exec.Command("dig", digArgs...);
+				out, err := cmd.CombinedOutput()
 
-			<-sem     // removes an int from sem, allowing another to proceed
-			wg.Done() //if we do for,and need to wait for group
-		}(d)
+				queryTotalCount.With(prometheus.Labels{"domain": domain}).Inc()
+				fmt.Printf("combined out:\n%s\n", string(out))
+				if err != nil {
+					fmt.Printf("'dig %v' failed with %s\n", digArgs, err);
+					querySuccess.With(prometheus.Labels{"domain": domain}).Set(0)
+					queryFailCount.With(prometheus.Labels{"domain": domain}).Inc()
+				} else {
+					querySuccess.With(prometheus.Labels{"domain": domain}).Set(1)
+					querySuccessCount.With(prometheus.Labels{"domain": domain}).Inc()
+				}
+				elapsed := time.Since(now).Milliseconds()
+				//fmt.Printf("elapsed %d ms\n", elapsed)
+				queryTime.With(prometheus.Labels{"domain": domain}).Set(float64(elapsed))
+				mutex.Unlock()
+
+				<-sem     // removes an int from sem, allowing another to proceed
+				wg.Done() //if we do for,and need to wait for group
+			}(d, n)
+		}
 	}
 
 	wg.Wait()
 
-	//go func(i int) {
-	//	defer wg.Done()
-	//	val := slice[i]
-	//	fmt.Printf("i: %v, val: %v\n", i, val)
-	//}(i)
-
-	//queryTime.With(prometheus.Labels{"domain":domain}).Set(rand.Float64());
 }
 
 func main() {
-	var digTimeout = getEnvAsInt("TIMEOUT", default_digTimeout);
-	var digRetries = getEnvAsInt("TRIES", default_digRetries);
-	var interval = getEnvAsInt("INTERVAL", default_interval)
+	var timeoutStr = getEnv("TIMEOUT", default_timeout);
+	var intervalStr = getEnv("INTERVAL", default_interval)
+	//
+	var timeout, timeoutErr = time.ParseDuration(timeoutStr);
+	if (timeoutErr != nil) {
+		log.Printf("Invalid TIMEOUT duration : `%s`", timeoutStr)
+		log.Fatal(timeoutErr);
+	}
+	var interval, intervalErr = time.ParseDuration(intervalStr);
+	if (intervalErr != nil) {
+		log.Printf("Invalid INTERVAL duration : `%s`", intervalStr)
+		log.Fatal(intervalErr);
+	}
 	var domainsStr = getEnv("DOMAINS", default_domains)
+	var dnsServersStr = getEnv("DNS_SERVERS", "DEFAULT");
 	var domains = strings.Split(strings.ReplaceAll(domainsStr, " ", ""), ",");
-	var dnsServer, useDnsServer = os.LookupEnv("DNS_SERVER");
-	resetCounters(domains);
+	var dnsServers = strings.Split(strings.ReplaceAll(dnsServersStr, " ", ""), ",");
 	//
 	fmt.Printf("Using Config :\n")
-	if (useDnsServer) {
-		fmt.Printf("\tDNS Server : %v\n", dnsServer)
-	} else {
-		fmt.Printf("\tDNS Server : default\n");
-	}
-	fmt.Printf("\tDomains    : %v\n", domains)
-	fmt.Printf("\tDig Timeout: %v seconds\n", digTimeout)
-	fmt.Printf("\tDig Retries: %v seconds\n", digRetries)
-	fmt.Printf("\tInterval   : %d seconds\n", interval)
+	fmt.Printf("\tDNS Servers : %v\n", dnsServers)
+	fmt.Printf("\tDomains     : %v\n", domains)
+	fmt.Printf("\tTimeout     : %v \n", timeout)
+	fmt.Printf("\tInterval    : %v \n", interval)
 	fmt.Printf("\n\n")
+
+	resetCounters(domains, dnsServers);
 	//
 	time.Sleep(2 * time.Second);
 	//
 	go func() {
-		defer starTimer(interval, domains, useDnsServer, dnsServer);
-		queryDomains(domains, useDnsServer, dnsServer);
+		defer starTimer(interval, domains, dnsServers, timeout);
+		queryDomains(domains, dnsServers, timeout);
 	}()
 
 	// Create Server and Route Handlers
-	r := mux.NewRouter()
+	httpRouter := mux.NewRouter()
 
-	//r.HandleFunc("/", handler)
-	r.HandleFunc("/live", healthHandler)
-	r.HandleFunc("/ready", readinessHandler)
-	r.HandleFunc("/metrics", metricsHandler)
+	//httpRouter.HandleFunc("/", handler)
+	httpRouter.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html>
+			<head><title>Kube DNS Checker</title></head>
+			<body>
+			<h1>Kube DNS Checker</h1>
+			<p><a href="/metrics">Metrics</a></p>
+			</body>
+			</html>`))
+	})
+	httpRouter.HandleFunc("/live", healthHandler)
+	httpRouter.HandleFunc("/ready", readinessHandler)
+	httpRouter.HandleFunc("/metrics", metricsHandler)
 
 	srv := &http.Server{
-		Handler:      r,
+		Handler:      httpRouter,
 		Addr:         ":8080",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -204,43 +225,34 @@ func main() {
 		}
 	}()
 
-	//var period = getEnvAsInt("PERIOD", period) * 1000;
-	//resetTicker := time.NewTicker(time.Duration(period) * time.Millisecond);
-	//go func() {
-	//	for {
-	//		select {
-	//		case t := <-resetTicker.C:
-	//			fmt.Println("Reset Tick at", t.Format(time.RFC3339))
-	//			resetCounters();
-	//		}
-	//	}
-	//}()
-
 	// Graceful Shutdown
 	waitForShutdown(srv)
 }
 
-func starTimer(interval int, domains []string, useDnsServer bool, dnsServer string) {
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func starTimer(interval time.Duration, domains []string, dnsServers []string, timeout time.Duration) {
+
+	ticker := time.NewTicker(interval)
 	go func() {
 		for {
 			select {
 			//case t := <-ticker.C:
 			//fmt.Println("Tick at", t.Format(time.RFC3339))
 			case <-ticker.C:
-				queryDomains(domains, useDnsServer, dnsServer);
+				queryDomains(domains, dnsServers, timeout);
 			}
 		}
 	}()
 }
 
-func resetCounters(domains []string) {
+func resetCounters(domains []string, dnsServers []string) {
 	mutex.Lock()
 
 	for _, domain := range domains {
-		queryTotalCount.With(prometheus.Labels{"domain": domain}).Set(0)
-		querySuccessCount.With(prometheus.Labels{"domain": domain}).Set(0)
-		queryFailCount.With(prometheus.Labels{"domain": domain}).Set(0)
+		for _, nameserver := range domains {
+			queryTotalCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
+			querySuccessCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
+			queryFailCount.With(prometheus.Labels{"dns_server": nameserver, "domain": domain}).Set(0)
+		}
 	}
 
 	mutex.Unlock()
