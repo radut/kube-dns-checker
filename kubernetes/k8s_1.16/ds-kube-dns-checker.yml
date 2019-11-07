@@ -1,0 +1,74 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-dns-checker
+  namespace: monitor
+  labels:
+    app: kube-dns-checker
+spec:
+  selector:
+    matchLabels:
+      app: kube-dns-checker
+  template:
+    metadata:
+      labels:
+        app: kube-dns-checker
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8080'
+        prometheus.io/path: '/metrics'
+        prometheus.io/scheme: 'http'
+    spec:
+      containers:
+        - name: kube-dns-checker
+          image: radut/kube-dns-checker
+          imagePullPolicy: Always
+          env:
+            - name: DOMAINS
+              value: "www.google.com"
+            - name: NAMESERVERS
+              value: "DEFAULT,10.233.0.3"
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+            limits:
+              cpu: 10m
+              memory: 30Mi
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8080
+            #              httpHeaders:
+            #                - name: X-Custom-Header
+            #                  value: Awesome
+            initialDelaySeconds: 10
+            periodSeconds: 3
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          key: node.kubernetes.io/not-ready
+          operator: Exists
+        - effect: NoExecute
+          key: node.kubernetes.io/unreachable
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/memory-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: master
+          operator: Exists
