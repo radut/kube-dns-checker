@@ -28,7 +28,8 @@ spec:
             - name: DOMAINS
               value: "www.google.com"
             - name: NAMESERVERS
-              value: "DEFAULT,10.233.0.3"
+#              value: "DEFAULT,10.233.0.3"
+              value: "DEFAULT"
           ports:
             - containerPort: 8080
               protocol: TCP
