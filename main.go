@@ -172,7 +172,7 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				}
 				digArgs = append(digArgs, "+noall");
 				digArgs = append(digArgs, "+answer");
-				digArgs = append(digArgs, "+stats");
+				//digArgs = append(digArgs, "+stats");
 				digArgs = append(digArgs, "+time="+strconv.Itoa(int(timeout.Seconds())));
 				digArgs = append(digArgs, "+tries="+strconv.Itoa(1));
 				digArgs = append(digArgs, domain);
@@ -183,7 +183,7 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				out, err := cmd.CombinedOutput()
 				elapsed := time.Since(now);
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%s\n", nameserver, domain, elapsed, string(out));
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
 					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
 				}
