@@ -191,18 +191,18 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 						var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ");
 						if (len(queryTimeStrTemp) == 2) {
 							queryTimeStr = queryTimeStrTemp[1];
-						} else {
-							elapsed = timeout;
+							queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
+							queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
+							var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr);
+							if (timeoutErr != nil) {
+								fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
+							} else {
+								elapsed = durationQueryTime;
+							}
 						}
+					} else if (strings.Index(line, "connection timed out") > -1) {
+						elapsed = timeout;
 					}
-				}
-				queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
-				queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
-				var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr);
-				if (timeoutErr != nil) {
-					fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
-				} else {
-					elapsed = durationQueryTime;
 				}
 
 				if err == nil {
