@@ -183,24 +183,30 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				out, err := cmd.CombinedOutput()
 				elapsed := time.Since(now);
 				var outStrings = strings.Split(string(out), "\n");
+				var queryTimeStrLine = "";
+				var queryTimeStr = "";
 				for _, line := range outStrings {
-					if (strings.Index(line, "Query time: ") > -1) {
-						log.Printf("parsed querymsec");
-						var queryTimeStr = strings.Split(line, "Query time: ")[1];
-						queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
-						queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
-						var queryTime, timeoutErr = time.ParseDuration(queryTimeStr);
-						if (timeoutErr != nil) {
-							fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
-							//log.Fatal(timeoutErr);
+					if (strings.Index(line, ";; Query time: ") > -1) {
+						queryTimeStrLine = line;
+						var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ");
+						if (len(queryTimeStrTemp) == 2) {
+							queryTimeStr = queryTimeStrTemp[1];
 						} else {
-							elapsed = queryTime;
+							elapsed = timeout;
 						}
 					}
 				}
+				queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
+				queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
+				var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr);
+				if (timeoutErr != nil) {
+					fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
+				} else {
+					elapsed = durationQueryTime;
+				}
 
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]);
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine);
 					//log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
 					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
