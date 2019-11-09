@@ -184,13 +184,12 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				elapsed := time.Since(now);
 				var outStrings = strings.Split(string(out), "\n");
 				var queryTimeStrLine = "";
-				var queryTimeStr = "";
 				for _, line := range outStrings {
 					if (strings.Index(line, ";; Query time: ") > -1) {
 						queryTimeStrLine = line;
 						var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ");
 						if (len(queryTimeStrTemp) == 2) {
-							queryTimeStr = queryTimeStrTemp[1];
+							var queryTimeStr = queryTimeStrTemp[1];
 							queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
 							queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
 							var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr);
