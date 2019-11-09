@@ -122,7 +122,7 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 					}
 				}
 				now := time.Now()
-				log.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
+				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with internal GO Resolver\n", nameserver, domain);
 				ctx, _ := context.WithTimeout(context.Background(), timeout);
 				ips, err := resolver.LookupIPAddr(ctx, domain)
 				elapsed := time.Since(now);
@@ -176,17 +176,14 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				digArgs = append(digArgs, "+time="+strconv.Itoa(int(timeout.Seconds())));
 				digArgs = append(digArgs, "+tries="+strconv.Itoa(1));
 				digArgs = append(digArgs, domain);
-				fmt.Printf("executing 'dig %v'\n", digArgs);
 				//
+				now := time.Now()
+				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs);
 				cmd := exec.Command("dig", digArgs...);
 				out, err := cmd.CombinedOutput()
-				now := time.Now()
-				log.Printf("Lookup Start 'dnsServer=%v domain=%v'\n", nameserver, domain);
-				ctx, _ := context.WithTimeout(context.Background(), timeout);
-				//ips, err := resolver.LookupIPAddr(ctx, domain)
 				elapsed := time.Since(now);
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%v\n", nameserver, domain, elapsed, ips);
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%s\n", nameserver, domain, elapsed, string(out));
 				} else {
 					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
 				}
@@ -282,53 +279,53 @@ main() {
 	//
 	go func() {
 		defer starTimer(interval, useGORESOLV, domains, dnsServers, timeout);
-		queryDomains(useGORESOLV, domains, dnsServers, timeout);
+		if (useGORESOLV) {
+			queryDomainsWithInternalGOResolver(domains, dnsServers, timeout);
+		} else {
+			queryDomainsWithDIG(domains, dnsServers, timeout);
+		}
 	}()
 
 	// Graceful Shutdown
 	waitForShutdown(srv)
 }
 
-func
-starTimer(interval
-time.Duration, useGORESOLV
-bool, domains
-[]string, dnsServers
-[]string, timeout
-time.Duration) {
+func starTimer(interval time.Duration, useGORESOLV bool, domains []string, dnsServers []string, timeout time.Duration) {
 
-ticker := time.NewTicker(interval)
-go func () {
-for {
-select {
-//case t := <-ticker.C:
-//fmt.Println("Tick at", t.Format(time.RFC3339))
-case <-ticker.C:
-queryDomains(useGORESOLV, domains, dnsServers, timeout);
-}
-}
-}()
-}
-
-func
-resetCounters(domains
-[]string, dnsServers
-[]string) {
-mutex.Lock()
-
-for _, domain := range domains {
-for _, nameserver := range domains {
-queryTotalCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
-querySuccessCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
-queryFailCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
-}
+	ticker := time.NewTicker(interval)
+	go func() {
+		for {
+			select {
+			//case t := <-ticker.C:
+			//fmt.Println("Tick at", t.Format(time.RFC3339))
+			case <-ticker.C:
+				{
+					if (useGORESOLV) {
+						queryDomainsWithInternalGOResolver(domains, dnsServers, timeout);
+					} else {
+						queryDomainsWithDIG(domains, dnsServers, timeout);
+					}
+				}
+			}
+		}
+	}()
 }
 
-mutex.Unlock()
+func resetCounters(domains []string, dnsServers []string) {
+	mutex.Lock()
+
+	for _, domain := range domains {
+		for _, nameserver := range domains {
+			queryTotalCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
+			querySuccessCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
+			queryFailCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
+		}
+	}
+
+	mutex.Unlock()
 }
 
-func
-waitForShutdown(srv *http.Server) {
+func waitForShutdown(srv *http.Server) {
 	interruptChan := make(chan os.Signal, 1)
 	signal.Notify(interruptChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
@@ -344,39 +341,30 @@ waitForShutdown(srv *http.Server) {
 	os.Exit(0)
 }
 
-func
-getEnv(key
-string, defaultVal
-string) string{
-if value, exists := os.LookupEnv(key); exists{
-return value
-}
+func getEnv(key string, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
 
-return defaultVal
+	return defaultVal
 }
 
 // Simple helper function to read an environment variable into integer or return a default value
-func
-getEnvAsInt(name
-string, defaultVal
-int) int{
-valueStr := getEnv(name, "")
-if value, err := strconv.Atoi(valueStr); err == nil{
-return value
-}
+func getEnvAsInt(name string, defaultVal int) int {
+	valueStr := getEnv(name, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
 
-return defaultVal
+	return defaultVal
 }
 
 // Helper to read an environment variable into a bool or return default value
-func
-getEnvAsBool(name
-string, defaultVal
-bool) bool{
-valStr := getEnv(name, "")
-if val, err := strconv.ParseBool(valStr); err == nil{
-return val
-}
+func getEnvAsBool(name string, defaultVal bool) bool {
+	valStr := getEnv(name, "")
+	if val, err := strconv.ParseBool(valStr); err == nil {
+		return val
+	}
 
-return defaultVal
+	return defaultVal
 }
