@@ -172,7 +172,7 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				}
 				digArgs = append(digArgs, "+noall");
 				digArgs = append(digArgs, "+answer");
-				//digArgs = append(digArgs, "+stats");
+				digArgs = append(digArgs, "+stats");
 				digArgs = append(digArgs, "+time="+strconv.Itoa(int(timeout.Seconds())));
 				digArgs = append(digArgs, "+tries="+strconv.Itoa(1));
 				digArgs = append(digArgs, domain);
@@ -182,8 +182,26 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				cmd := exec.Command("dig", digArgs...);
 				out, err := cmd.CombinedOutput()
 				elapsed := time.Since(now);
+				var outStrings = strings.Split(string(out), "\n");
+				for _, line := range outStrings {
+					if (strings.Index(line, "Query time: ") > -1) {
+						log.Printf("parsed querymsec");
+						var queryTimeStr = strings.Split(line, "Query time: ")[1];
+						queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
+						queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
+						var queryTime, timeoutErr = time.ParseDuration(queryTimeStr);
+						if (timeoutErr != nil) {
+							fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
+							//log.Fatal(timeoutErr);
+						} else {
+							elapsed = queryTime;
+						}
+					}
+				}
+
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]);
+					//log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
 					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
 				}
