@@ -50,27 +50,27 @@ spec:
             - containerPort: 8080
               protocol: TCP
           resources:
-            requests:
-              cpu: 10m
-              memory: 20Mi
             limits:
               cpu: 20m
               memory: 40Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
           readinessProbe:
             httpGet:
               path: /ready
               port: 8080
             initialDelaySeconds: 10
             timeoutSeconds: 3
-          livenessProbe:
-            httpGet:
-              path: /live
-              port: 8080
-#              httpHeaders:
-#                - name: X-Custom-Header
-#                  value: Awesome
-            initialDelaySeconds: 10
-            periodSeconds: 3
+#          livenessProbe:
+#            httpGet:
+#              path: /live
+#              port: 8080
+##              httpHeaders:
+##                - name: X-Custom-Header
+##                  value: Awesome
+#            initialDelaySeconds: 10
+#            periodSeconds: 3
       tolerations:
         - effect: NoSchedule
           operator: Exists
