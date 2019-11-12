@@ -249,13 +249,14 @@ func main() {
 		fmt.Printf("Invalid INTERVAL duration : `%s`", intervalStr)
 		log.Fatal(intervalErr)
 	}
-	var useGORESOLV = getEnvAsBool("GO_RESOLV", false)
+	var useGORESOLV = getEnvAsBool("GO_RESOLVER", false)
 	var domainsStr = getEnv("DOMAINS", default_domains)
 	var dnsServersStr = getEnv("NAMESERVERS", "DEFAULT")
 	var domains = strings.Split(strings.ReplaceAll(domainsStr, " ", ""), ",")
 	var dnsServers = strings.Split(strings.ReplaceAll(dnsServersStr, " ", ""), ",")
 	//
 	fmt.Printf("Using Config :\n")
+	fmt.Printf("\tGO_RESOLVER : %v \n", useGORESOLV)
 	fmt.Printf("\tNAMESERVERS : %v\n", dnsServers)
 	fmt.Printf("\tDomains     : %v\n", domains)
 	fmt.Printf("\tTimeout     : %v \n", timeout)
