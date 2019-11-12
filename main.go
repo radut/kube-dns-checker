@@ -24,12 +24,12 @@ import (
 var mutex = &sync.Mutex{}
 
 //var default_domains = "www.google.com,www.cloudflare.com";
-var default_domains = "www.google.com";
+var default_domains = "www.google.com"
 
 var default_interval = "5s"
 var default_timeout = "5s"
 
-const MAX_CONCURRENT = 5
+const MAX_CONCURRENT = 2
 
 var (
 	queryTime = promauto.NewGaugeVec(
@@ -106,12 +106,12 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 				if nameserver == "DEFAULT" {
 					resolver = net.DefaultResolver
 				} else {
-					var ip = net.ParseIP(nameserver);
-					if (ip == nil) {
+					var ip = net.ParseIP(nameserver)
+					if ip == nil {
 						log.Printf("skipping invalid nameserver: `%s`\n", nameserver)
 						<-sem     // removes an int from sem, allowing another to proceed
 						wg.Done() //if we do for,and need to wait for group
-						return;
+						return
 					}
 					resolver = &net.Resolver{
 						PreferGo: true,
@@ -122,14 +122,14 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 					}
 				}
 				now := time.Now()
-				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with internal GO Resolver\n", nameserver, domain);
-				ctx, _ := context.WithTimeout(context.Background(), timeout);
+				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with internal GO Resolver\n", nameserver, domain)
+				ctx, _ := context.WithTimeout(context.Background(), timeout)
 				ips, err := resolver.LookupIPAddr(ctx, domain)
-				elapsed := time.Since(now);
+				elapsed := time.Since(now)
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%v\n", nameserver, domain, elapsed, ips);
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response=%v\n", nameserver, domain, elapsed, ips)
 				} else {
-					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
+					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 				}
 				mutex.Lock()
 
@@ -152,7 +152,7 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 	}
 
 	wg.Wait()
-	fmt.Printf("\n");
+	fmt.Printf("\n")
 }
 func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Duration) {
 
@@ -166,49 +166,49 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 
 				//routine
 				//cmd := exec.Command("dig", "@1.2.3.1", "+time=5", "+tries=1", domain)
-				var digArgs = []string{};
-				if (nameserver != "DEFAULT") {
-					digArgs = append(digArgs, "@"+nameserver);
+				var digArgs = []string{}
+				if nameserver != "DEFAULT" {
+					digArgs = append(digArgs, "@"+nameserver)
 				}
-				digArgs = append(digArgs, "+noall");
-				digArgs = append(digArgs, "+answer");
-				digArgs = append(digArgs, "+stats");
-				digArgs = append(digArgs, "+time="+strconv.Itoa(int(timeout.Seconds())));
-				digArgs = append(digArgs, "+tries="+strconv.Itoa(1));
-				digArgs = append(digArgs, domain);
+				digArgs = append(digArgs, "+noall")
+				digArgs = append(digArgs, "+answer")
+				digArgs = append(digArgs, "+stats")
+				digArgs = append(digArgs, "+time="+strconv.Itoa(int(timeout.Seconds())))
+				digArgs = append(digArgs, "+tries="+strconv.Itoa(1))
+				digArgs = append(digArgs, domain)
 				//
 				now := time.Now()
-				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs);
-				cmd := exec.Command("dig", digArgs...);
+				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
+				cmd := exec.Command("dig", digArgs...)
 				out, err := cmd.CombinedOutput()
-				elapsed := time.Since(now);
-				var outStrings = strings.Split(string(out), "\n");
-				var queryTimeStrLine = "";
+				elapsed := time.Since(now)
+				var outStrings = strings.Split(string(out), "\n")
+				var queryTimeStrLine = ""
 				for _, line := range outStrings {
-					if (strings.Index(line, ";; Query time: ") > -1) {
-						queryTimeStrLine = line;
-						var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ");
-						if (len(queryTimeStrTemp) == 2) {
-							var queryTimeStr = queryTimeStrTemp[1];
-							queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms");
-							queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s");
-							var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr);
-							if (timeoutErr != nil) {
+					if strings.Index(line, ";; Query time: ") > -1 {
+						queryTimeStrLine = line
+						var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ")
+						if len(queryTimeStrTemp) == 2 {
+							var queryTimeStr = queryTimeStrTemp[1]
+							queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms")
+							queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s")
+							var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr)
+							if timeoutErr != nil {
 								fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
 							} else {
-								elapsed = durationQueryTime;
+								elapsed = durationQueryTime
 							}
 						}
-					} else if (strings.Index(line, "connection timed out") > -1) {
-						elapsed = timeout;
+					} else if strings.Index(line, "connection timed out") > -1 {
+						elapsed = timeout
 					}
 				}
 
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine);
+					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
 					//log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
-					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err);
+					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 				}
 				mutex.Lock()
 
@@ -231,30 +231,29 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 	}
 
 	wg.Wait()
-	fmt.Printf("\n");
+	fmt.Printf("\n")
 }
 
-func
-main() {
-	var timeoutStr = getEnv("TIMEOUT", default_timeout);
+func main() {
+	var timeoutStr = getEnv("TIMEOUT", default_timeout)
 	var intervalStr = getEnv("INTERVAL", default_interval)
 
 	//
-	var timeout, timeoutErr = time.ParseDuration(timeoutStr);
-	if (timeoutErr != nil) {
+	var timeout, timeoutErr = time.ParseDuration(timeoutStr)
+	if timeoutErr != nil {
 		fmt.Printf("Invalid TIMEOUT duration : `%s`", timeoutStr)
-		log.Fatal(timeoutErr);
+		log.Fatal(timeoutErr)
 	}
-	var interval, intervalErr = time.ParseDuration(intervalStr);
-	if (intervalErr != nil) {
+	var interval, intervalErr = time.ParseDuration(intervalStr)
+	if intervalErr != nil {
 		fmt.Printf("Invalid INTERVAL duration : `%s`", intervalStr)
-		log.Fatal(intervalErr);
+		log.Fatal(intervalErr)
 	}
-	var useGORESOLV = getEnvAsBool("GO_RESOLV", false);
+	var useGORESOLV = getEnvAsBool("GO_RESOLV", false)
 	var domainsStr = getEnv("DOMAINS", default_domains)
-	var dnsServersStr = getEnv("NAMESERVERS", "DEFAULT");
-	var domains = strings.Split(strings.ReplaceAll(domainsStr, " ", ""), ",");
-	var dnsServers = strings.Split(strings.ReplaceAll(dnsServersStr, " ", ""), ",");
+	var dnsServersStr = getEnv("NAMESERVERS", "DEFAULT")
+	var domains = strings.Split(strings.ReplaceAll(domainsStr, " ", ""), ",")
+	var dnsServers = strings.Split(strings.ReplaceAll(dnsServersStr, " ", ""), ",")
 	//
 	fmt.Printf("Using Config :\n")
 	fmt.Printf("\tNAMESERVERS : %v\n", dnsServers)
@@ -263,9 +262,9 @@ main() {
 	fmt.Printf("\tInterval    : %v \n", interval)
 	fmt.Printf("\n\n")
 
-	resetCounters(domains, dnsServers);
+	resetCounters(domains, dnsServers)
 	//
-	time.Sleep(1 * time.Second);
+	time.Sleep(1 * time.Second)
 
 	// Create Server and Route Handlers
 	httpRouter := mux.NewRouter()
@@ -301,11 +300,11 @@ main() {
 
 	//
 	go func() {
-		defer starTimer(interval, useGORESOLV, domains, dnsServers, timeout);
-		if (useGORESOLV) {
-			queryDomainsWithInternalGOResolver(domains, dnsServers, timeout);
+		defer starTimer(interval, useGORESOLV, domains, dnsServers, timeout)
+		if useGORESOLV {
+			queryDomainsWithInternalGOResolver(domains, dnsServers, timeout)
 		} else {
-			queryDomainsWithDIG(domains, dnsServers, timeout);
+			queryDomainsWithDIG(domains, dnsServers, timeout)
 		}
 	}()
 
@@ -323,10 +322,10 @@ func starTimer(interval time.Duration, useGORESOLV bool, domains []string, dnsSe
 			//fmt.Println("Tick at", t.Format(time.RFC3339))
 			case <-ticker.C:
 				{
-					if (useGORESOLV) {
-						queryDomainsWithInternalGOResolver(domains, dnsServers, timeout);
+					if useGORESOLV {
+						queryDomainsWithInternalGOResolver(domains, dnsServers, timeout)
 					} else {
-						queryDomainsWithDIG(domains, dnsServers, timeout);
+						queryDomainsWithDIG(domains, dnsServers, timeout)
 					}
 				}
 			}
