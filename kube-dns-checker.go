@@ -117,7 +117,8 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 						PreferGo: true,
 						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 							d := net.Dialer{}
-							return d.DialContext(ctx, "udp", net.JoinHostPort(ip.String(), "53"))
+							//support only for ipv4
+							return d.DialContext(ctx, "udp4", net.JoinHostPort(ip.String(), "53"))
 						},
 					}
 				}

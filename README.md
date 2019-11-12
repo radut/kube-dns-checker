@@ -12,8 +12,8 @@
 ### How To
 ```bash
 
-go run main.go
-go build main.go
+go run kube-dns-checker.go
+go build kube-dns-checker.go
 
 docker build -t kube-dns-checker .
 docker run -p8080:8080 kube-dns-checker
