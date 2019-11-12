@@ -104,7 +104,9 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 			go func(domain string, nameserver string) {
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
-					resolver = net.DefaultResolver
+					resolver = &net.Resolver{
+						PreferGo: true,
+					}
 				} else {
 					var ip = net.ParseIP(nameserver)
 					if ip == nil {
@@ -117,8 +119,7 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 						PreferGo: true,
 						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 							d := net.Dialer{}
-							//support only for ipv4
-							return d.DialContext(ctx, "udp4", net.JoinHostPort(ip.String(), "53"))
+							return d.DialContext(ctx, "udp", net.JoinHostPort(ip.String(), "53"))
 						},
 					}
 				}
