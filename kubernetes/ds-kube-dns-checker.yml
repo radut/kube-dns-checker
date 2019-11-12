@@ -32,14 +32,11 @@ spec:
               protocol: TCP
           resources:
             requests:
-              cpu: 40m
+              cpu: 20m
               memory: 50Mi
             limits:
-              cpu: 40m
+              cpu: 20m
               memory: 50Mi
-            requests:
-              cpu: 10m
-              memory: 20Mi
           readinessProbe:
             httpGet:
               path: /ready
