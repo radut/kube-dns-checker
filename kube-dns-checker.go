@@ -105,7 +105,7 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
 					resolver = &net.Resolver{
-						PreferGo: true,
+						PreferGo: false,
 					}
 				} else {
 					var ip = net.ParseIP(nameserver)
