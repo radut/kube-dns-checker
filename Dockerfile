@@ -30,7 +30,7 @@ RUN apk --no-cache add ca-certificates bind-tools
 WORKDIR /root/
 
 # Copy the Pre-built binary file from the previous stage
-COPY --from=builder /app/main .
+COPY --from=builder /app/kube-dns-checker .
 
 # Expose port 8080 to the outside world
 EXPOSE 8080
