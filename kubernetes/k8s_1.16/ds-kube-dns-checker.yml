@@ -28,7 +28,7 @@ spec:
             - name: DOMAINS
               value: "www.google.com"
             - name: GO_RESOLVER
-              value: "true"
+              value: "false"
             - name: NAMESERVERS
 #              value: "DEFAULT,10.233.0.3"
               value: "DEFAULT"

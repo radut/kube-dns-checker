@@ -104,6 +104,7 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 			go func(domain string, nameserver string) {
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
+					//var buf, _ = ioutil.ReadFile("/etc/resolv.conf")
 					resolver = &net.Resolver{
 						PreferGo: true,
 						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
