@@ -105,7 +105,12 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 				var resolver *net.Resolver
 				if nameserver == "DEFAULT" {
 					resolver = &net.Resolver{
-						PreferGo: false,
+						PreferGo: true,
+						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+							d := net.Dialer{}
+							log.Printf("Default NS picked address: %v", address)
+							return d.DialContext(ctx, "udp", address)
+						},
 					}
 				} else {
 					var ip = net.ParseIP(nameserver)
