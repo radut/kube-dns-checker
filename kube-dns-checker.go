@@ -220,7 +220,6 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 
 				if err == nil {
 					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
-					//log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
 					log.Printf("Lookup ERROR           'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 					//retry
