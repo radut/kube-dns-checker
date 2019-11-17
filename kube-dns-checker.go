@@ -27,7 +27,7 @@ var mutex = &sync.Mutex{}
 var default_domains = "www.google.com"
 
 var default_interval = "5s"
-var default_timeout = "5s"
+var default_timeout = "3s"
 
 const MAX_CONCURRENT = 2
 
@@ -162,6 +162,35 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 	wg.Wait()
 	fmt.Printf("\n")
 }
+
+func executeDig(digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, time.Duration, string) {
+	cmd := exec.Command("dig", digArgs...)
+	out, err := cmd.CombinedOutput()
+	elapsed := time.Since(now)
+	var outStrings = strings.Split(string(out), "\n")
+	var queryTimeStrLine = ""
+	for _, line := range outStrings {
+		if strings.Index(line, ";; Query time: ") > -1 {
+			queryTimeStrLine = line
+			var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ")
+			if len(queryTimeStrTemp) == 2 {
+				var queryTimeStr = queryTimeStrTemp[1]
+				queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms")
+				queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s")
+				var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr)
+				if timeoutErr != nil {
+					fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
+				} else {
+					elapsed = durationQueryTime
+				}
+			}
+		} else if strings.Index(line, "connection timed out") > -1 {
+			elapsed = timeout
+		}
+	}
+	return out, err, elapsed, queryTimeStrLine
+}
+
 func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Duration) {
 
 	var wg sync.WaitGroup
@@ -187,36 +216,21 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				//
 				now := time.Now()
 				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-				cmd := exec.Command("dig", digArgs...)
-				out, err := cmd.CombinedOutput()
-				elapsed := time.Since(now)
-				var outStrings = strings.Split(string(out), "\n")
-				var queryTimeStrLine = ""
-				for _, line := range outStrings {
-					if strings.Index(line, ";; Query time: ") > -1 {
-						queryTimeStrLine = line
-						var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ")
-						if len(queryTimeStrTemp) == 2 {
-							var queryTimeStr = queryTimeStrTemp[1]
-							queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms")
-							queryTimeStr = strings.ReplaceAll(queryTimeStr, " sec", "s")
-							var durationQueryTime, timeoutErr = time.ParseDuration(queryTimeStr)
-							if timeoutErr != nil {
-								fmt.Printf("Cannot parse Query time: `%s`", queryTimeStr)
-							} else {
-								elapsed = durationQueryTime
-							}
-						}
-					} else if strings.Index(line, "connection timed out") > -1 {
-						elapsed = timeout
-					}
-				}
+				out, err, elapsed, queryTimeStrLine := executeDig(digArgs, now, timeout)
 
 				if err == nil {
 					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
 					//log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
 					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+					log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
+					digArgs = append(digArgs, "+tcp");
+					out, err, elapsed, queryTimeStrLine := executeDig(digArgs, now, timeout);
+					if err == nil {
+						log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine);
+					} else {
+						log.Printf("Lookup RETRY TCP ERROR  'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+					}
 				}
 				mutex.Lock()
 
