@@ -219,10 +219,10 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				out, err, elapsed, queryTimeStrLine := executeDig(digArgs, now, timeout)
 
 				if err == nil {
-					log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
+					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
 					//log.Printf("Lookup OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, string(out));
 				} else {
-					log.Printf("Lookup ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+					log.Printf("Lookup ERROR           'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 					//retry
 					digArgs = append(digArgs, "+tcp");
 					log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
@@ -230,7 +230,7 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 					if err == nil {
 						log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine);
 					} else {
-						log.Printf("Lookup RETRY TCP ERROR  'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+						log.Printf("Lookup RETRY TCP ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 					}
 				}
 				mutex.Lock()
