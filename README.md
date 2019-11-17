@@ -29,7 +29,7 @@ docker push radut/kube-dns-checker
 `GO_RESOLVER`    boolean use internal GO resolver or DIG, default false (use dig)
 `DOMAINS`        comma separated domains example "www.google.com,www.cloudflare.com", default value "www.google.com"
 `NAMESERVERS`    comma separated servers which are being used to query example "DEFAULT,8.8.8.8", default values "DEFAULT", which interogates the server from /etc/resolv.conf. 
-`TIMEOUT`        dig timeout in seconds, default '5s'
+`TIMEOUT`        dig timeout in seconds, default '3s' # with dig by default it retries on tcp, with same timeout
 `INTERVAL`       interval to run checks default '5s'
   
 ```
