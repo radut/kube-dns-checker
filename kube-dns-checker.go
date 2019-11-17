@@ -215,7 +215,7 @@ func queryDomainsWithDIG(domains []string, dnsServers []string, timeout time.Dur
 				digArgs = append(digArgs, domain)
 				//
 				now := time.Now()
-				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
+				log.Printf("Lookup Start           'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
 				out, err, elapsed, queryTimeStrLine := executeDig(digArgs, now, timeout)
 
 				if err == nil {
