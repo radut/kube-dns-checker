@@ -3,7 +3,6 @@ apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
   name: kube-dns-checker
-  namespace: monitor
   labels:
     app: kube-dns-checker
 spec:
