@@ -58,21 +58,25 @@ spec:
 #            #                  value: Awesome
 #            initialDelaySeconds: 10
 #            periodSeconds: 3
-      tolerations:
-        - effect: NoSchedule
-          operator: Exists
-        - effect: NoExecute
-          key: node.kubernetes.io/not-ready
-          operator: Exists
-        - effect: NoExecute
-          key: node.kubernetes.io/unreachable
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/disk-pressure
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/memory-pressure
-          operator: Exists
-        - effect: NoSchedule
-          key: master
-          operator: Exists
+      priorityClassName: system-cluster-critical
+#      tolerations:
+#        - effect: NoSchedule
+#          operator: Exists
+#        - effect: NoExecute
+#          key: node.kubernetes.io/not-ready
+#          operator: Exists
+#        - effect: NoExecute
+#          key: node.kubernetes.io/unreachable
+#          operator: Exists
+#        - effect: NoSchedule
+#          key: node.kubernetes.io/disk-pressure
+#          operator: Exists
+#        - effect: NoSchedule
+#          key: node.kubernetes.io/node.kubernetes.io/out-of-disk
+#          operator: Exists
+#        - effect: NoSchedule
+#          key: node.kubernetes.io/memory-pressure
+#          operator: Exists
+#        - effect: NoSchedule
+#          key: master
+#          operator: Exists
