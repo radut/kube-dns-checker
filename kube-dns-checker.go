@@ -163,15 +163,25 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 	fmt.Printf("\n")
 }
 
-func executeDig(digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, time.Duration, string) {
+func executeDig(digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, time.Duration, string, string) {
 	cmd := exec.Command("dig", digArgs...)
 	out, err := cmd.CombinedOutput()
 	elapsed := time.Since(now)
 	var outStrings = strings.Split(string(out), "\n")
 	var queryTimeStrLine = ""
+	var response = ""
 	for _, line := range outStrings {
+		fmt.Printf("%s\n", line)
+		if strings.Index(line, "IN") > -1 {
+			if strings.Index(line, "A") > -1 || strings.Index(line, " CNAME ") > -1 {
+				if len(response) > 3 {
+					response = response + "--> " + line
+				} else {
+					response = line
+				}
+			}
+		}
 		if strings.Index(line, ";; Query time: ") > -1 {
-			queryTimeStrLine = line
 			var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ")
 			if len(queryTimeStrTemp) == 2 {
 				var queryTimeStr = queryTimeStrTemp[1]
@@ -188,7 +198,7 @@ func executeDig(digArgs []string, now time.Time, timeout time.Duration) ([]byte,
 			elapsed = timeout
 		}
 	}
-	return out, err, elapsed, queryTimeStrLine
+	return out, err, elapsed, queryTimeStrLine, response
 }
 
 func listContains(lst []string, lookup string) bool {
@@ -199,7 +209,7 @@ func listContains(lst []string, lookup string) bool {
 	}
 	return false
 }
-func queryDomainsWithDIG(domains []string, dig_extra_args []string, dnsServers []string, timeout time.Duration) {
+func queryDomainsWithDIG(domains []string, dig_args []string, dnsServers []string, timeout time.Duration) {
 
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX_CONCURRENT)
@@ -216,31 +226,31 @@ func queryDomainsWithDIG(domains []string, dig_extra_args []string, dnsServers [
 					digArgs = append(digArgs, "@"+nameserver)
 				}
 
-				for _, digExtraArgument := range dig_extra_args {
-					digArgs = append(digArgs, digExtraArgument)
+				for _, digArgument := range dig_args {
+					digArgs = append(digArgs, digArgument)
 				}
 
-				digArgs = append(digArgs, "+noall")
-				digArgs = append(digArgs, "+answer")
-				digArgs = append(digArgs, "+stats")
+				//digArgs = append(digArgs, "+noall")
+				//digArgs = append(digArgs, "+answer")
+				//digArgs = append(digArgs, "+stats")
 				digArgs = append(digArgs, "+time="+strconv.Itoa(int(timeout.Seconds())))
 				digArgs = append(digArgs, "+tries="+strconv.Itoa(1))
 				digArgs = append(digArgs, domain)
 				//
 				now := time.Now()
 				log.Printf("Lookup Start           'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-				out, err, elapsed, queryTimeStrLine := executeDig(digArgs, now, timeout)
+				_, err, elapsed, response, queryTimeStrLine := executeDig(digArgs, now, timeout)
 
 				if err == nil {
-					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
+					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
 				} else {
 					log.Printf("Lookup ERROR           'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 					//retry
 					digArgs = append(digArgs, "+tcp")
 					log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-					out, err, elapsed, queryTimeStrLine := executeDig(digArgs, now, timeout)
+					_, err, elapsed, response, queryTimeStrLine := executeDig(digArgs, now, timeout)
 					if err == nil {
-						log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, strings.Split(string(out), "\n")[0]+" "+queryTimeStrLine)
+						log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
 					} else {
 						log.Printf("Lookup RETRY TCP ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
 					}
@@ -303,19 +313,24 @@ func main() {
 		}
 	}
 
-	var digExtraArgsStr = getEnv("DIG_EXTRA_ARGS", default_domains)
-	lst = strings.Split(strings.ReplaceAll(digExtraArgsStr, " ", ""), ",")
-	var digExtraArgs = []string{}
+	var digArgsStr = getEnv("DIG_ARGS", "+noall +answer +stats")
+
+	lst = strings.Split(digArgsStr, " ")
+	var digArgs = []string{}
 	for _, n := range lst {
-		if !listContains(digExtraArgs, n) {
-			digExtraArgs = append(digExtraArgs, n)
+		if !listContains(digArgs, n) {
+			digArgs = append(digArgs, n)
 		}
 	}
 
 	//
 	fmt.Printf("Using Config :\n")
-	fmt.Printf("\tGO_RESOLVER : %v \n", useGORESOLV)
-	fmt.Printf("\tdigExtraArgs : %v\n", digExtraArgs)
+	if !useGORESOLV {
+		fmt.Printf("\tResolver    : DIG \n")
+		fmt.Printf("\tDIG_ARGS    : %v\n", digArgs)
+	} else {
+		fmt.Printf("\tResolver    : GO \n")
+	}
 	fmt.Printf("\tNAMESERVERS : %v\n", dnsServers)
 	fmt.Printf("\tDomains     : %v\n", domains)
 	fmt.Printf("\tTimeout     : %v \n", timeout)
@@ -360,11 +375,11 @@ func main() {
 
 	//
 	go func() {
-		defer starTimer(interval, useGORESOLV, domains, digExtraArgs, dnsServers, timeout)
+		defer starTimer(interval, useGORESOLV, domains, digArgs, dnsServers, timeout)
 		if useGORESOLV {
 			queryDomainsWithInternalGOResolver(domains, dnsServers, timeout)
 		} else {
-			queryDomainsWithDIG(domains, digExtraArgs, dnsServers, timeout)
+			queryDomainsWithDIG(domains, digArgs, dnsServers, timeout)
 		}
 	}()
 
@@ -372,7 +387,7 @@ func main() {
 	waitForShutdown(srv)
 }
 
-func starTimer(interval time.Duration, useGORESOLV bool, domains []string, digExtraArgs []string, dnsServers []string, timeout time.Duration) {
+func starTimer(interval time.Duration, useGORESOLV bool, domains []string, digArgs []string, dnsServers []string, timeout time.Duration) {
 
 	ticker := time.NewTicker(interval)
 	go func() {
@@ -385,7 +400,7 @@ func starTimer(interval time.Duration, useGORESOLV bool, domains []string, digEx
 					if useGORESOLV {
 						queryDomainsWithInternalGOResolver(domains, dnsServers, timeout)
 					} else {
-						queryDomainsWithDIG(domains, digExtraArgs, dnsServers, timeout)
+						queryDomainsWithDIG(domains, digArgs, dnsServers, timeout)
 					}
 				}
 			}
