@@ -173,9 +173,9 @@ func executeDig(digArgs []string, now time.Time, timeout time.Duration) ([]byte,
 	for _, line := range outStrings {
 		fmt.Printf("%s\n", line)
 		if strings.Index(line, "IN") > -1 {
-			if strings.Index(line, "A") > -1 || strings.Index(line, " CNAME ") > -1 {
+			if strings.Index(line, "A") > -1 || strings.Index(line, "CNAME") > -1 {
 				if len(response) > 3 {
-					response = response + "--> " + line
+					response = response + " --> " + line
 				} else {
 					response = line
 				}
