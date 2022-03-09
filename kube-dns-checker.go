@@ -214,7 +214,7 @@ func listContains(lst []string, lookup string) bool {
 	}
 	return false
 }
-func queryDomainsWithDIG(debug bool, domains []string, dig_args []string, dnsServers []string, timeout time.Duration) {
+func queryDomainsWithDIG(debug bool, digRetryWithTCP bool, domains []string, dig_args []string, dnsServers []string, timeout time.Duration) {
 
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX_CONCURRENT)
@@ -252,14 +252,16 @@ func queryDomainsWithDIG(debug bool, domains []string, dig_args []string, dnsSer
 					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
 				} else {
 					log.Printf("Lookup ERROR           'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
-					//retry
-					digArgs = append(digArgs, "+tcp")
-					log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-					_, err, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
-					if err == nil {
-						log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
-					} else {
-						log.Printf("Lookup RETRY TCP ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+
+					if digRetryWithTCP {
+						digArgs = append(digArgs, "+tcp")
+						log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
+						_, err, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
+						if err == nil {
+							log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
+						} else {
+							log.Printf("Lookup RETRY TCP ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+						}
 					}
 				}
 				mutex.Lock()
@@ -321,6 +323,7 @@ func main() {
 		}
 	}
 
+	var digRetryWithTCP = getEnvAsBool("DIG_RETRY_TCP", false)
 	var digArgsStr = getEnv("DIG_ARGS", "")
 
 	lst = strings.Split(digArgsStr, " ")
@@ -384,11 +387,11 @@ func main() {
 
 	//
 	go func() {
-		defer starTimer(debug, interval, useGORESOLV, domains, digArgs, dnsServers, timeout)
+		defer starTimer(debug, interval, useGORESOLV, digRetryWithTCP, domains, digArgs, dnsServers, timeout)
 		if useGORESOLV {
 			queryDomainsWithInternalGOResolver(debug, domains, dnsServers, timeout)
 		} else {
-			queryDomainsWithDIG(debug, domains, digArgs, dnsServers, timeout)
+			queryDomainsWithDIG(debug, digRetryWithTCP, domains, digArgs, dnsServers, timeout)
 		}
 	}()
 
@@ -396,7 +399,7 @@ func main() {
 	waitForShutdown(srv)
 }
 
-func starTimer(debug bool, interval time.Duration, useGORESOLV bool, domains []string, digArgs []string, dnsServers []string, timeout time.Duration) {
+func starTimer(debug bool, interval time.Duration, useGORESOLV bool, digRetryWithTCP bool, domains []string, digArgs []string, dnsServers []string, timeout time.Duration) {
 
 	ticker := time.NewTicker(interval)
 	go func() {
@@ -409,7 +412,7 @@ func starTimer(debug bool, interval time.Duration, useGORESOLV bool, domains []s
 					if useGORESOLV {
 						queryDomainsWithInternalGOResolver(debug, domains, dnsServers, timeout)
 					} else {
-						queryDomainsWithDIG(debug, domains, digArgs, dnsServers, timeout)
+						queryDomainsWithDIG(debug, digRetryWithTCP, domains, digArgs, dnsServers, timeout)
 					}
 				}
 			}
