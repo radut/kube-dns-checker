@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bitfield/script"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -165,10 +165,16 @@ func queryDomainsWithInternalGOResolver(debug bool, domains []string, dnsServers
 	fmt.Printf("\n")
 }
 
-func executeDig(debug bool, digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, time.Duration, string, string) {
-	cmd := exec.Command("dig", digArgs...)
-	fmt.Printf("%s\n", cmd)
-	out, err := cmd.CombinedOutput()
+func executeDig(debug bool, digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, string, time.Duration, string, string) {
+	//cmd := exec.Command("dig", digArgs...)
+	//fmt.Printf("%s\n", cmd)
+	//out, err := cmd.CombinedOutput()
+
+	var p = script.Exec("dig " + strings.Join(digArgs, " "))
+	out, _ := p.Bytes()
+	var err = p.Error()
+	var exitStatus = p.ExitStatus()
+
 	elapsed := time.Since(now)
 	var outStrings = strings.Split(string(out), "\n")
 	var queryTimeStrLine = ""
@@ -203,7 +209,19 @@ func executeDig(debug bool, digArgs []string, now time.Time, timeout time.Durati
 			elapsed = timeout
 		}
 	}
-	return out, err, elapsed, queryTimeStrLine, response
+	var exitStatusString = ""
+	if exitStatus == 0 {
+		exitStatusString = "OK"
+	} else if exitStatus == 1 {
+		exitStatusString = "Usage error"
+	} else if exitStatus == 8 {
+		exitStatusString = "Couldn't open batch file"
+	} else if exitStatus == 9 {
+		exitStatusString = "No reply from server"
+	} else if exitStatus == 10 {
+		exitStatusString = "Internal Error"
+	}
+	return out, err, exitStatusString, elapsed, queryTimeStrLine, response
 }
 
 func listContains(lst []string, lookup string) bool {
@@ -246,21 +264,21 @@ func queryDomainsWithDIG(debug bool, digRetryWithTCP bool, domains []string, dig
 				//
 				now := time.Now()
 				log.Printf("Lookup Start           'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-				_, err, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
+				_, err, exitStatus, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
 
 				if err == nil {
 					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
 				} else {
-					log.Printf("Lookup ERROR           'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+					log.Printf("Lookup ERROR           'dnsServer=%v domain=%v' : took %v -> error=%v message=%s\n", nameserver, domain, elapsed, err, exitStatus)
 
 					if digRetryWithTCP {
 						digArgs = append(digArgs, "+tcp")
 						log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-						_, err, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
+						_, err, exitStatus, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
 						if err == nil {
 							log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
 						} else {
-							log.Printf("Lookup RETRY TCP ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v\n", nameserver, domain, elapsed, err)
+							log.Printf("Lookup RETRY TCP ERROR 'dnsServer=%v domain=%v' : took %v -> error=%v message=%s\n", nameserver, domain, elapsed, err, exitStatus)
 						}
 					}
 				}
