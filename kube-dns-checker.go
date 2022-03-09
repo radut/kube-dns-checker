@@ -93,7 +93,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, timeout time.Duration) {
+func queryDomainsWithInternalGOResolver(debug bool, domains []string, dnsServers []string, timeout time.Duration) {
 
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX_CONCURRENT)
@@ -163,15 +163,18 @@ func queryDomainsWithInternalGOResolver(domains []string, dnsServers []string, t
 	fmt.Printf("\n")
 }
 
-func executeDig(digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, time.Duration, string, string) {
+func executeDig(debug bool, digArgs []string, now time.Time, timeout time.Duration) ([]byte, error, time.Duration, string, string) {
 	cmd := exec.Command("dig", digArgs...)
+	fmt.Printf("%s\n", cmd)
 	out, err := cmd.CombinedOutput()
 	elapsed := time.Since(now)
 	var outStrings = strings.Split(string(out), "\n")
 	var queryTimeStrLine = ""
 	var response = ""
 	for _, line := range outStrings {
-		fmt.Printf("%s\n", line)
+		if debug {
+			fmt.Printf("%s\n", line)
+		}
 		if strings.Index(line, "IN") > -1 {
 			if strings.Index(line, "A") > -1 || strings.Index(line, "CNAME") > -1 {
 				if len(response) > 3 {
@@ -209,7 +212,7 @@ func listContains(lst []string, lookup string) bool {
 	}
 	return false
 }
-func queryDomainsWithDIG(domains []string, dig_args []string, dnsServers []string, timeout time.Duration) {
+func queryDomainsWithDIG(debug bool, domains []string, dig_args []string, dnsServers []string, timeout time.Duration) {
 
 	var wg sync.WaitGroup
 	sem := make(chan int, MAX_CONCURRENT)
@@ -226,8 +229,10 @@ func queryDomainsWithDIG(domains []string, dig_args []string, dnsServers []strin
 					digArgs = append(digArgs, "@"+nameserver)
 				}
 
-				for _, digArgument := range dig_args {
-					digArgs = append(digArgs, digArgument)
+				for _, arg := range dig_args {
+					if arg != "" {
+						digArgs = append(digArgs, arg)
+					}
 				}
 
 				//digArgs = append(digArgs, "+noall")
@@ -239,7 +244,7 @@ func queryDomainsWithDIG(domains []string, dig_args []string, dnsServers []strin
 				//
 				now := time.Now()
 				log.Printf("Lookup Start           'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-				_, err, elapsed, response, queryTimeStrLine := executeDig(digArgs, now, timeout)
+				_, err, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
 
 				if err == nil {
 					log.Printf("Lookup OK              'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
@@ -248,7 +253,7 @@ func queryDomainsWithDIG(domains []string, dig_args []string, dnsServers []strin
 					//retry
 					digArgs = append(digArgs, "+tcp")
 					log.Printf("Lookup RETRY TCP START 'dnsServer=%v domain=%v' with 'dig %v'\n", nameserver, domain, digArgs)
-					_, err, elapsed, response, queryTimeStrLine := executeDig(digArgs, now, timeout)
+					_, err, elapsed, response, queryTimeStrLine := executeDig(debug, digArgs, now, timeout)
 					if err == nil {
 						log.Printf("Lookup RETRY TCP OK    'dnsServer=%v domain=%v' : took %v -> response='%s'\n", nameserver, domain, elapsed, response+" "+queryTimeStrLine)
 					} else {
@@ -295,6 +300,7 @@ func main() {
 		log.Fatal(intervalErr)
 	}
 	var useGORESOLV = getEnvAsBool("GO_RESOLVER", false)
+	var debug = getEnvAsBool("DEBUG", false)
 
 	var domainsStr = getEnv("DOMAINS", default_domains)
 	var domains = []string{}
@@ -313,7 +319,7 @@ func main() {
 		}
 	}
 
-	var digArgsStr = getEnv("DIG_ARGS", "+noall +answer +stats")
+	var digArgsStr = getEnv("DIG_ARGS", "")
 
 	lst = strings.Split(digArgsStr, " ")
 	var digArgs = []string{}
@@ -335,6 +341,7 @@ func main() {
 	fmt.Printf("\tDomains     : %v\n", domains)
 	fmt.Printf("\tTimeout     : %v \n", timeout)
 	fmt.Printf("\tInterval    : %v \n", interval)
+	fmt.Printf("\tDEBUG       : %v \n", debug)
 	fmt.Printf("\n\n")
 
 	resetCounters(domains, dnsServers)
@@ -375,11 +382,11 @@ func main() {
 
 	//
 	go func() {
-		defer starTimer(interval, useGORESOLV, domains, digArgs, dnsServers, timeout)
+		defer starTimer(debug, interval, useGORESOLV, domains, digArgs, dnsServers, timeout)
 		if useGORESOLV {
-			queryDomainsWithInternalGOResolver(domains, dnsServers, timeout)
+			queryDomainsWithInternalGOResolver(debug, domains, dnsServers, timeout)
 		} else {
-			queryDomainsWithDIG(domains, digArgs, dnsServers, timeout)
+			queryDomainsWithDIG(debug, domains, digArgs, dnsServers, timeout)
 		}
 	}()
 
@@ -387,7 +394,7 @@ func main() {
 	waitForShutdown(srv)
 }
 
-func starTimer(interval time.Duration, useGORESOLV bool, domains []string, digArgs []string, dnsServers []string, timeout time.Duration) {
+func starTimer(debug bool, interval time.Duration, useGORESOLV bool, domains []string, digArgs []string, dnsServers []string, timeout time.Duration) {
 
 	ticker := time.NewTicker(interval)
 	go func() {
@@ -398,9 +405,9 @@ func starTimer(interval time.Duration, useGORESOLV bool, domains []string, digAr
 			case <-ticker.C:
 				{
 					if useGORESOLV {
-						queryDomainsWithInternalGOResolver(domains, dnsServers, timeout)
+						queryDomainsWithInternalGOResolver(debug, domains, dnsServers, timeout)
 					} else {
-						queryDomainsWithDIG(domains, digArgs, dnsServers, timeout)
+						queryDomainsWithDIG(debug, domains, digArgs, dnsServers, timeout)
 					}
 				}
 			}
