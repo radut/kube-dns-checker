@@ -109,7 +109,9 @@ func queryDomainsWithInternalGOResolver(debug bool, domains []string, dnsServers
 						PreferGo: true,
 						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 							d := net.Dialer{}
-							log.Printf("Default NS picked address: %v", address)
+							if debug {
+								log.Printf("Default NS picked address: %v", address)
+							}
 							return d.DialContext(ctx, "udp", address)
 						},
 					}
