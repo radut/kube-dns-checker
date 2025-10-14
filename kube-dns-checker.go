@@ -133,7 +133,8 @@ func queryDomainsWithInternalGOResolver(debug bool, domains []string, dnsServers
 				}
 				now := time.Now()
 				log.Printf("Lookup Start 'dnsServer=%v domain=%v' with internal GO Resolver\n", nameserver, domain)
-				ctx, _ := context.WithTimeout(context.Background(), timeout)
+				ctx, cancel := context.WithTimeout(context.Background(), timeout)
+				defer cancel()
 				ips, err := resolver.LookupIPAddr(ctx, domain)
 				elapsed := time.Since(now)
 				if err == nil {
@@ -193,7 +194,7 @@ func executeDig(debug bool, digArgs []string, now time.Time, timeout time.Durati
 			}
 		}
 		if strings.Index(line, ";; Query time: ") > -1 {
-			var queryTimeStrTemp = strings.Split(queryTimeStrLine, ";; Query time: ")
+			var queryTimeStrTemp = strings.Split(line, ";; Query time: ")
 			if len(queryTimeStrTemp) == 2 {
 				var queryTimeStr = queryTimeStrTemp[1]
 				queryTimeStr = strings.ReplaceAll(queryTimeStr, " msec", "ms")
@@ -442,7 +443,7 @@ func resetCounters(domains []string, dnsServers []string) {
 	mutex.Lock()
 
 	for _, domain := range domains {
-		for _, nameserver := range domains {
+		for _, nameserver := range dnsServers {
 			queryTotalCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
 			querySuccessCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
 			queryFailCount.With(prometheus.Labels{"nameserver": nameserver, "domain": domain}).Set(0)
