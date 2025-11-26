@@ -3,7 +3,7 @@ variables:
   # git ssl no verify - git clone works for https/ssl from letsencrypt
   GIT_SSL_NO_VERIFY: "1"
   PROJECT_NAME: ${CI_PROJECT_NAME}
-  NEXUS_REGISTRY: registry.radut.xyz
+  NEXUS_REGISTRY: docker-nexus.radut.info
 
 # gitlab_projectid-master
 # CI_PROJECT_NAME
