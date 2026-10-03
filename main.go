@@ -23,6 +23,9 @@ import (
 	"github.com/radut/kube-dns-checker/internal/server"
 )
 
+// version is injected at build time: go build -ldflags "-X main.version=2.0.0".
+var version = "dev"
+
 const (
 	httpReadTimeout  = 10 * time.Second
 	httpWriteTimeout = 10 * time.Second
@@ -67,7 +70,7 @@ func run() error {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	m := metrics.New(reg)
-	m.Init(targets, string(cfg.Resolver), cfg.QueryType)
+	m.Init(targets, string(cfg.Resolver), cfg.QueryType, version)
 
 	observe := func(res probe.Result, at time.Time) {
 		m.Observe(res, at)
@@ -142,6 +145,7 @@ func newLogger(cfg config.Config) *slog.Logger {
 
 func logConfig(logger *slog.Logger, cfg config.Config, targets []probe.Target) {
 	logger.Info("configuration",
+		"version", version,
 		"resolver", cfg.Resolver,
 		"domains", cfg.Domains,
 		"nameservers", cfg.Nameservers,

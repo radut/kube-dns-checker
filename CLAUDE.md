@@ -12,11 +12,16 @@ configuration, metrics and endpoints.
 ## Commands
 
 ```bash
-go build -o kube-dns-checker .     # build
-go test -race ./...                # tests (no network needed)
-go vet ./... && gofmt -l .         # lint
-docker build -t kube-dns-checker . # image
+make build     # go build with -X main.version=$(cat VERSION)
+make test      # go test -race with coverage (no network needed)
+make lint      # gofmt + go vet
+make image     # docker build, tags v<VERSION> and latest
 ```
+
+Versioning: `VERSION` is the single source of truth. `.gitlab-ci.yml` runs
+tests then pushes multi-arch images to Nexus, Docker Hub and the GitLab
+registry (see README "Versioning and CI" for the tag scheme). Releases are
+git tags `v<VERSION>`; CI refuses a tag that does not match the file.
 
 If `go` on PATH is the MacPorts build and fails with a toolchain version
 mismatch, use `/usr/local/go/bin/go` with `GOTOOLCHAIN=local`.
@@ -33,6 +38,7 @@ mismatch, use `/usr/local/go/bin/go` with `GOTOOLCHAIN=local`.
 | `internal/server` | `/`, `/metrics`, `/ready`, `/live`. |
 | `internal/dnstest` | In-process DNS server for tests: delays, drops, truncation, rcodes, flakiness. |
 | `kubernetes/` | DaemonSet, Deployment, namespace and alert rules. |
+| `VERSION`, `Makefile`, `.gitlab-ci.yml` | Release version, local build targets, CI pipeline. |
 
 ## Design notes
 

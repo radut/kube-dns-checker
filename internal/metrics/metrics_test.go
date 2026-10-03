@@ -17,7 +17,7 @@ func TestObserve(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	m := New(reg)
 	tgt := probe.Target{Nameserver: "10.0.0.1:53", Domain: "a.test.", Protocol: config.ProtocolUDP, QueryType: dns.TypeA}
-	m.Init([]probe.Target{tgt}, "dns", "A")
+	m.Init([]probe.Target{tgt}, "dns", "A", "1.2.3")
 
 	at := time.Unix(1_700_000_000, 0)
 	m.Observe(probe.Result{Target: tgt, Success: true, Duration: 20 * time.Millisecond}, at)
@@ -43,7 +43,7 @@ func TestObserve(t *testing.T) {
 	if got := testutil.CollectAndCount(m.Duration); got != 1 {
 		t.Errorf("duration series = %d, want 1", got)
 	}
-	if got := testutil.ToFloat64(m.Info.WithLabelValues("dns", "A")); got != 1 {
+	if got := testutil.ToFloat64(m.Info.WithLabelValues("dns", "A", "1.2.3")); got != 1 {
 		t.Errorf("info = %v", got)
 	}
 }
@@ -52,7 +52,7 @@ func TestInitCreatesSeriesBeforeAnyProbe(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	m := New(reg)
 	tgt := probe.Target{Nameserver: "10.0.0.1:53", Domain: "a.test.", Protocol: config.ProtocolTCP, QueryType: dns.TypeA}
-	m.Init([]probe.Target{tgt}, "dns", "A")
+	m.Init([]probe.Target{tgt}, "dns", "A", "1.2.3")
 
 	families, err := reg.Gather()
 	if err != nil {

@@ -52,7 +52,7 @@ func New(reg prometheus.Registerer) *Metrics {
 		Info: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "dns_checker_info",
 			Help: "Static information about the checker configuration.",
-		}, []string{"resolver", "query_type"}),
+		}, []string{"resolver", "query_type", "version"}),
 	}
 	reg.MustRegister(m.Duration, m.Queries, m.Failures, m.Success, m.LastCheck, m.Info)
 	return m
@@ -60,8 +60,8 @@ func New(reg prometheus.Registerer) *Metrics {
 
 // Init pre-creates the per-target series so rate() works from the first
 // scrape and absent targets are visible.
-func (m *Metrics) Init(targets []probe.Target, resolver, queryType string) {
-	m.Info.WithLabelValues(resolver, queryType).Set(1)
+func (m *Metrics) Init(targets []probe.Target, resolver, queryType, version string) {
+	m.Info.WithLabelValues(resolver, queryType, version).Set(1)
 	for _, t := range targets {
 		labels := labelsFor(t)
 		m.Queries.With(labels).Add(0)

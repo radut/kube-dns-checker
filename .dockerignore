@@ -3,6 +3,7 @@
 .env
 *.md
 kubernetes/
-gitlab-ci.yml
+.gitlab-ci.yml
+Makefile
 kube-dns-checker
 *.out

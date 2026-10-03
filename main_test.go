@@ -67,6 +67,9 @@ func TestRunEndToEnd(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	if !strings.Contains(body, `dns_checker_info{query_type="A",resolver="dns",version="dev"} 1`) {
+		t.Errorf("dns_checker_info missing or wrong version in:\n%s", body)
+	}
 	if !strings.Contains(body, "dns_query_duration_seconds_bucket") {
 		t.Fatalf("metrics never showed expected series; last body:\n%s", body)
 	}

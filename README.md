@@ -24,7 +24,8 @@ nameserver).
 ## Run
 
 ```bash
-go build -o kube-dns-checker .
+make build          # go build with the version from the VERSION file
+make test lint
 DOMAINS=www.google.com. NAMESERVERS=1.1.1.1,8.8.8.8 PROTOCOLS=udp,tcp TIMEOUT=500ms ./kube-dns-checker
 
 docker build -t radut/kube-dns-checker .
@@ -32,6 +33,24 @@ docker run --rm -p 8080:8080 -e NAMESERVERS=1.1.1.1 radut/kube-dns-checker
 
 kubectl apply -f kubernetes/00-namespace.yml -f kubernetes/ds-kube-dns-checker.yml
 ```
+
+### Versioning and CI
+
+`VERSION` holds the release version (currently 2.0.0) and is the single
+source of truth. `make build` and the Dockerfile inject it into the binary;
+it appears in the startup log, the `dns_checker_info{version}` metric and
+the image's `org.opencontainers.image.version` label.
+
+`.gitlab-ci.yml` runs the tests, then pushes multi-arch images to Nexus,
+Docker Hub and the GitLab registry:
+
+| Pipeline for      | Tags pushed                          |
+|-------------------|--------------------------------------|
+| `master`          | `latest`, `v<VERSION>`, `<short sha>` |
+| git tag `vX.Y.Z`  | `vX.Y.Z`, `<short sha>` (must equal `v<VERSION>`) |
+| other branches    | `<branch slug>`, `<short sha>`        |
+
+To release: bump `VERSION`, commit, then `git tag v$(cat VERSION) && git push --tags`.
 
 ### Multi-arch image
 

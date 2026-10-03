@@ -1,0 +1,87 @@
+variables:
+  DOCKER_DRIVER: overlay2
+  GIT_SSL_NO_VERIFY: "1"
+  NEXUS_REGISTRY: docker-nexus.radut.info
+  GOPATH: $CI_PROJECT_DIR/.go
+  # every platform alpine:3.21 is published for; the Go stage cross-compiles
+  # on the build host so no emulation is needed for compiling
+  BUILD_PLATFORMS: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
+
+stages:
+  - test
+  - image
+
+before_script:
+  - set -e
+
+test:
+  image: golang:1.25
+  stage: test
+  cache:
+    key: "$CI_PROJECT_NAME"
+    paths:
+      - .go/pkg/mod/
+  script:
+    - test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
+    - go vet ./...
+    - go test -race -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tail -1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+
+# Image tags pushed to every registry:
+#   master           -> latest, v<VERSION>, <short sha>
+#   git tag vX.Y.Z   -> vX.Y.Z, <short sha>   (tag must match the VERSION file)
+#   other branches   -> <branch slug>, <short sha>
+.push_image:
+  needs: ["test"]
+  image: radut/ubuntu-docker
+  stage: image
+  script:
+    - export VERSION=$(tr -d '[:space:]' < VERSION)
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        if [ "$CI_COMMIT_TAG" != "v$VERSION" ]; then
+          echo "git tag $CI_COMMIT_TAG does not match VERSION file (v$VERSION)"; exit 1
+        fi
+        TAGS="-t ${IMAGE_REPO}:${CI_COMMIT_TAG}"
+      elif [ "$CI_COMMIT_REF_NAME" = "master" ]; then
+        TAGS="-t ${IMAGE_REPO}:latest -t ${IMAGE_REPO}:v${VERSION}"
+      else
+        TAGS="-t ${IMAGE_REPO}:${CI_COMMIT_REF_SLUG}"
+      fi
+      export TAGS="${TAGS} -t ${IMAGE_REPO}:${CI_COMMIT_SHORT_SHA}"
+    - echo "Pushing ${IMAGE_REPO} version ${VERSION} for ${BUILD_PLATFORMS} with ${TAGS}"
+    - printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+    - docker run --rm --privileged tonistiigi/binfmt --install all
+    - docker buildx create --driver docker-container --name multiarch --use || docker buildx use multiarch
+    - docker buildx build
+        --platform "${BUILD_PLATFORMS}"
+        --provenance=false
+        --build-arg VERSION="${VERSION}"
+        --build-arg VCS_REF="${CI_COMMIT_SHA}"
+        ${TAGS}
+        --push .
+
+nexus:
+  extends: .push_image
+  variables:
+    REGISTRY_HOST: $NEXUS_REGISTRY
+    REGISTRY_USER: $DOCKER_USER
+    REGISTRY_PASSWORD: $DOCKER_PASSWORD
+    IMAGE_REPO: $NEXUS_REGISTRY/$CI_PROJECT_NAME
+
+docker_io:
+  extends: .push_image
+  variables:
+    REGISTRY_HOST: docker.io
+    REGISTRY_USER: $DOCKERIO_USER
+    REGISTRY_PASSWORD: $DOCKERIO_PASSWORD
+    IMAGE_REPO: $DOCKERIO_USER/$CI_PROJECT_NAME
+
+gitlab_registry:
+  extends: .push_image
+  variables:
+    REGISTRY_HOST: $CI_REGISTRY
+    REGISTRY_USER: $CI_REGISTRY_USER
+    REGISTRY_PASSWORD: $CI_REGISTRY_PASSWORD
+    IMAGE_REPO: $CI_REGISTRY_IMAGE

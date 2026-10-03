@@ -36,7 +36,7 @@ func TestEndpoints(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	m := metrics.New(reg)
 	tgt := probe.Target{Nameserver: "10.0.0.1:53", Domain: "a.test.", Protocol: config.ProtocolUDP, QueryType: dns.TypeA}
-	m.Init([]probe.Target{tgt}, "dns", "A")
+	m.Init([]probe.Target{tgt}, "dns", "A", "test")
 	health := &fakeHealth{}
 	h := NewHandler(reg, health, Options{MaxStaleness: time.Minute})
 
