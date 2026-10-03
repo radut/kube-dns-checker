@@ -1,37 +1,117 @@
-### Motivation
-* kube-dns is the most important component of a kubernetes cluster, therefore it needs to be working all time.
-* If there is a problem with either of the nodes, dns-pods, misconfigured network, or routing issues -> kube-dns service -> kube-dns pods you must know about it
-* trigger alerts based on error rate.
+# kube-dns-checker
 
+Probes DNS servers on a schedule and exposes the results as Prometheus
+metrics. Run it as a DaemonSet to see, per node, whether DNS works, how fast
+it is, and *why* it fails (timeout vs SERVFAIL vs NXDOMAIN, UDP vs TCP, which
+nameserver).
 
-* container:8080/metrics, already has prometheus annotaitons so will be scraped automatically
-* sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,node_ip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,node_ip,job) * 100 > 0
-* check kuberentes/alert.rules 
+## How it works
 
+* Every nameserver × domain × protocol combination is a **target** with its
+  own ticker, so a dead nameserver never delays sampling of the others.
+* Two resolver implementations:
+  * `RESOLVER=dns` (default): raw DNS packets via `miekg/dns`. Exact response
+    code and RTT, sub-second timeouts, UDP or TCP. Names are queried exactly
+    as given, so use FQDNs with a trailing dot.
+  * `RESOLVER=go`: Go's `net.Resolver`, which behaves like an application:
+    search domains and `ndots` from `resolv.conf` apply. Failure reasons are
+    approximate because the stdlib hides the rcode.
+* `NAMESERVERS=DEFAULT` expands to the `nameserver` entries of
+  `/etc/resolv.conf` (the kube-dns service IP inside a pod). Mix it with
+  CoreDNS pod IPs, node-local-dns (`169.254.20.10`) or an upstream (`8.8.8.8`)
+  to tell the paths apart.
 
-### How To
+## Run
+
 ```bash
-
-go run kube-dns-checker.go
-go build kube-dns-checker.go
-
-docker build -t kube-dns-checker .
-docker run -p8080:8080 kube-dns-checker
-
+go build -o kube-dns-checker .
+DOMAINS=www.google.com. NAMESERVERS=1.1.1.1,8.8.8.8 PROTOCOLS=udp,tcp TIMEOUT=500ms ./kube-dns-checker
 
 docker build -t radut/kube-dns-checker .
-docker push radut/kube-dns-checker
+docker run --rm -p 8080:8080 -e NAMESERVERS=1.1.1.1 radut/kube-dns-checker
+
+kubectl apply -f kubernetes/00-namespace.yml -f kubernetes/ds-kube-dns-checker.yml
 ```
 
+### Multi-arch image
 
-### Environment Variables
-```config
-`GO_RESOLVER`    boolean use internal GO resolver or DIG, default false (use dig)
-`DOMAINS`        comma separated domains example "www.google.com,www.cloudflare.com", default value "www.google.com"
-`NAMESERVERS`    comma separated servers which are being used to query example "DEFAULT,8.8.8.8", default values "DEFAULT", which interogates the server from /etc/resolv.conf. 
-`TIMEOUT`        dig timeout in seconds, default '3s' # with dig by default it retries on tcp, with same timeout
-`INTERVAL`       interval to run checks default '5s'
-  
+The build stage cross-compiles on the host, so only the small alpine stage
+runs under QEMU. Any platform alpine supports works:
+
+```bash
+docker buildx create --name multiarch --driver docker-container --use   # once
+docker buildx build \
+  --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64 \
+  -t radut/kube-dns-checker:latest --push .
 ```
- 
- 
+
+## Configuration
+
+| Variable      | Default            | Description |
+|---------------|--------------------|-------------|
+| `RESOLVER`    | `dns`              | `dns` (raw client) or `go` (net.Resolver). `GO_RESOLVER=true` still works. |
+| `DOMAINS`     | `www.google.com.`  | Comma separated names to look up. Use trailing dots. |
+| `NAMESERVERS` | `DEFAULT`          | Comma separated `DEFAULT`, `ip`, `ip:port`, `[ipv6]:port`. Port defaults to 53. |
+| `PROTOCOLS`   | `udp`              | `udp`, `tcp` or both. Each is probed separately. Truncated UDP answers are retried over TCP automatically. |
+| `QUERY_TYPE`  | `A`                | A, AAAA, CNAME, MX, NS, TXT, SRV, PTR, SOA (`go` resolver: no SRV/SOA). |
+| `TIMEOUT`     | `2s`               | Per attempt. Milliseconds are fine, e.g. `250ms`. Minimum `10ms`. |
+| `INTERVAL`    | `5s`               | Time between probes of the same target. |
+| `ATTEMPTS`    | `1`                | Tries per probe before it counts as failed. `2` hides single packet drops. |
+| `CONCURRENCY` | `8`                | Max probes in flight at once. |
+| `LISTEN_ADDR` | `:8080`            | HTTP listen address. |
+| `RESOLV_CONF` | `/etc/resolv.conf` | File read for `DEFAULT`. |
+| `LOG_LEVEL`   | `info`             | `debug`, `info`, `warn`, `error`. `DEBUG=true` still works. |
+| `LOG_FORMAT`  | `text`             | `text` or `json`. |
+
+Successful lookups are logged at `info`, failures at `warn`. Set
+`LOG_LEVEL=warn` on busy clusters.
+
+## Endpoints
+
+* `/metrics` Prometheus metrics
+* `/ready` 200 once the probe loops run. It does **not** reflect DNS health:
+  a checker that observes failures must stay ready so it keeps being scraped.
+* `/live` 503 when a target has produced no result for 3 intervals, so
+  Kubernetes restarts a wedged checker.
+
+## Metrics
+
+All probe metrics carry `nameserver`, `domain` and `protocol` labels.
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `dns_query_duration_seconds` | histogram | Round-trip time of the final attempt. |
+| `dns_queries_total` | counter | Probes run. |
+| `dns_query_failures_total` | counter | Failed probes, with a `reason` label: an rcode (`NXDOMAIN`, `SERVFAIL`, `REFUSED`, ...), `timeout`, `network_error`, `no_answer`. |
+| `dns_query_success` | gauge | 1 if the most recent probe succeeded, else 0. |
+| `dns_last_check_timestamp_seconds` | gauge | Unix time of the most recent probe. |
+| `dns_checker_info` | gauge | `resolver` and `query_type` labels. |
+
+A probe is successful only when the response is `NOERROR` **and** contains at
+least one answer record.
+
+### Useful queries
+
+```promql
+# failure ratio per node and nameserver
+sum(rate(dns_query_failures_total[2m])) by (kubernetes_node, nameserver)
+  / sum(rate(dns_queries_total[2m])) by (kubernetes_node, nameserver)
+
+# why it fails
+sum(rate(dns_query_failures_total[5m])) by (reason, nameserver, protocol)
+
+# p99 latency
+histogram_quantile(0.99, sum(rate(dns_query_duration_seconds_bucket[5m])) by (le, nameserver, protocol))
+```
+
+See `kubernetes/alert.rules` for alert examples.
+
+## Development
+
+```bash
+go test -race ./...
+go test -race -coverprofile=cover.out ./... && go tool cover -func=cover.out
+```
+
+Tests use an in-process DNS server (`internal/dnstest`) that can delay, drop,
+truncate or flake on demand, so no network access is needed.

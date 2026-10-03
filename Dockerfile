@@ -1,39 +1,33 @@
-# Dockerfile References: https://docs.docker.com/engine/reference/builder/
+# syntax=docker/dockerfile:1
 
-# Start from the latest golang base image
-FROM golang:latest as builder
+# The build stage always runs on the host's native platform and
+# cross-compiles for the target, so multi-arch builds need no emulation
+# for the Go compile step:
+#   docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t radut/kube-dns-checker --push .
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+WORKDIR /src
 
-# Add Maintainer Info
-LABEL maintainer="Radu Toader <radu.m.toader@gmail.com>"
-
-# Set the Current Working Directory inside the container
-WORKDIR /app
-
-# Copy go mod and sum files
 COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
-# Download all dependancies. Dependencies will be cached if the go.mod and go.sum files are not changed
-RUN go mod download
-
-# Copy the source from the current directory to the Working Directory inside the container
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
+    go build -trimpath -ldflags="-s -w" -o /out/kube-dns-checker .
 
-# Build the Go app
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o kube-dns-checker .
+# bind-tools (dig, nslookup, host) are kept on purpose: this is a
+# troubleshooting pod and having them available via kubectl exec is useful.
+FROM alpine:3.21
+RUN apk --no-cache add ca-certificates bind-tools \
+    && addgroup -S -g 10001 dnscheck \
+    && adduser -S -u 10001 -G dnscheck -H -s /sbin/nologin dnscheck
 
+COPY --from=builder /out/kube-dns-checker /usr/local/bin/kube-dns-checker
 
-######## Start a new stage from scratch #######
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates bind-tools
-
-WORKDIR /root/
-
-# Copy the Pre-built binary file from the previous stage
-COPY --from=builder /app/kube-dns-checker .
-
-# Expose port 8080 to the outside world
+USER 10001:10001
 EXPOSE 8080
-
-# Command to run the executable
-CMD ["./kube-dns-checker"]
+ENTRYPOINT ["/usr/local/bin/kube-dns-checker"]

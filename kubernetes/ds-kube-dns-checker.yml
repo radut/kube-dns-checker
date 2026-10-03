@@ -1,11 +1,15 @@
----
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: kube-dns-checker
   labels:
     app: kube-dns-checker
 spec:
+  selector:
+    matchLabels:
+      app: kube-dns-checker
+  updateStrategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -16,71 +20,64 @@ spec:
         prometheus.io/path: '/metrics'
         prometheus.io/scheme: 'http'
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: kube-dns-checker
           image: radut/kube-dns-checker
           imagePullPolicy: Always
           env:
+            # An in-cluster name exercises CoreDNS itself; an external name
+            # exercises upstream forwarding. Use trailing dots (FQDNs).
             - name: DOMAINS
-              value: "www.google.com"
-            - name: GO_RESOLVER
-              value: "false"
+              value: "kubernetes.default.svc.cluster.local.,www.google.com."
+            # DEFAULT = the nameservers from the pod's /etc/resolv.conf (the
+            # kube-dns service IP). Add CoreDNS pod IPs, node-local-dns
+            # (169.254.20.10) or an upstream (8.8.8.8) to tell the paths apart.
             - name: NAMESERVERS
-#              value: "DEFAULT,10.233.0.3"
               value: "DEFAULT"
+            - name: PROTOCOLS
+              value: "udp,tcp"
+            - name: TIMEOUT
+              value: "2s"
+            - name: INTERVAL
+              value: "5s"
+            - name: ATTEMPTS
+              value: "1"
+            - name: LOG_FORMAT
+              value: "json"
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
               protocol: TCP
           resources:
             requests:
-              cpu: 500m
-              memory: 100Mi
+              cpu: 20m
+              memory: 32Mi
             limits:
-              cpu: 500m
-              memory: 100Mi
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           readinessProbe:
             httpGet:
               path: /ready
-              port: 8080
-            initialDelaySeconds: 5
-            failureThreshold: 3
+              port: http
+            initialDelaySeconds: 2
             periodSeconds: 10
-            timeoutSeconds: 10
-#          livenessProbe:
-#            httpGet:
-#              path: /live
-#              port: 8080
-#            #              httpHeaders:
-#            #                - name: X-Custom-Header
-#            #                  value: Awesome
-#            initialDelaySeconds: 10
-#            periodSeconds: 3
-      #      priorityClassName: system-cluster-critical
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
       tolerations:
-        - effect: NoSchedule
-          operator: Exists
-        - effect: NoExecute
-          operator: Exists
-        - key: CriticalAddonsOnly
-          operator: Exists
-        - effect: NoExecute
-          key: node.kubernetes.io/not-ready
-          operator: Exists
-        - effect: NoExecute
-          key: node.kubernetes.io/unreachable
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/disk-pressure
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/memory-pressure
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/pid-pressure
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/unschedulable
-          operator: Exists
-        - effect: NoSchedule
-          key: node.kubernetes.io/network-unavailable
-          operator: Exists
+        - operator: Exists

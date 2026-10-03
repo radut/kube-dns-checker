@@ -1,0 +1,8 @@
+.git
+.idea
+.env
+*.md
+kubernetes/
+gitlab-ci.yml
+kube-dns-checker
+*.out

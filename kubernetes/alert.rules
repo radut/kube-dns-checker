@@ -1,25 +1,48 @@
-sum(rate(dns_query_fail_count[1m])) by (domain,app,kubernetes_node,kubernetes_pod_name) / sum(rate(dns_query_total_count[1m])) by (domain,app,kubernetes_node,kubernetes_pod_name) > 0
-
-sum(rate(dns_query_fail_count[1m])) by (domain) / sum(rate(dns_query_total_count[1m])) by (domain) > 0
-
-sum(rate(dns_query_fail_count[1m])) by (kubernetes_node) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node) > 0.1
-
-
-
-
-sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,job) * 100 > 5
-
-
+# Example queries
+#
+# Failure ratio per node and nameserver over the last minute:
+#   sum(rate(dns_query_failures_total[1m])) by (kubernetes_node, nameserver)
+#     / sum(rate(dns_queries_total[1m])) by (kubernetes_node, nameserver)
+#
+# Failures broken down by reason (timeout, SERVFAIL, NXDOMAIN, ...):
+#   sum(rate(dns_query_failures_total[5m])) by (reason, nameserver)
+#
+# p99 lookup latency per nameserver and protocol:
+#   histogram_quantile(0.99, sum(rate(dns_query_duration_seconds_bucket[5m])) by (le, nameserver, protocol))
+#
+# Targets that are currently failing:
+#   dns_query_success == 0
 
 groups:
-- name: Alerts
-  rules:
+  - name: kube-dns-checker
+    rules:
+      - alert: KubeDNSQueryFailures
+        expr: |
+          sum(rate(dns_query_failures_total[2m])) by (kubernetes_node, nameserver, protocol, job)
+            / sum(rate(dns_queries_total[2m])) by (kubernetes_node, nameserver, protocol, job)
+            * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DNS queries failing on {{ $labels.kubernetes_node }}"
+          description: "{{ humanize $value }}% of {{ $labels.protocol }} queries to {{ $labels.nameserver }} fail from node {{ $labels.kubernetes_node }} (job {{ $labels.job }})"
 
-  - alert: Kubernetes DNS
-    expr: sum(rate(dns_query_fail_count[1m])) by (kubernetes_node,nameserver,node_ip,nodeip,job) / sum(rate(dns_query_total_count[1m])) by (kubernetes_node,nameserver,node_ip,nodeip,job) * 100 > 5
-    for: 30s
-    labels:
-      severity: critical
-    annotations:
-      summary: "Kubernetes DNS is not working properly"
-      description: "Kubernetes DNS: {{ humanize $value}}% of queries are failing for pods scheduled on node {{$labels.kubernetes_node}}@{{$labels.node_ip}} of job {{ $labels.job }}"
+      - alert: KubeDNSSlow
+        expr: |
+          histogram_quantile(0.95, sum(rate(dns_query_duration_seconds_bucket[5m])) by (le, kubernetes_node, nameserver)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DNS is slow on {{ $labels.kubernetes_node }}"
+          description: "p95 lookup latency to {{ $labels.nameserver }} is {{ humanizeDuration $value }} from node {{ $labels.kubernetes_node }}"
+
+      - alert: KubeDNSCheckerStale
+        expr: time() - dns_last_check_timestamp_seconds > 60
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "kube-dns-checker stopped probing"
+          description: "No result for {{ $labels.domain }} via {{ $labels.nameserver }} in over a minute on {{ $labels.kubernetes_node }}"
