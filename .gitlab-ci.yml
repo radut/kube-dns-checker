@@ -34,7 +34,7 @@ test:
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
 
 # Image tags pushed to every registry:
-#   master           -> latest, v<VERSION>, <short sha>
+#   main             -> latest, v<VERSION>, <short sha>
 #   git tag vX.Y.Z   -> vX.Y.Z, <short sha>   (tag must match the VERSION file)
 #   other branches   -> <branch slug>, <short sha>
 # The build runs on the IN-CLUSTER BuildKit, not on a local Docker daemon: the runner is a Kubernetes
@@ -59,7 +59,7 @@ test:
           echo "git tag $CI_COMMIT_TAG does not match VERSION file (v$VERSION)"; exit 1
         fi
         TAGS="-t ${IMAGE_REPO}:${CI_COMMIT_TAG}"
-      elif [ "$CI_COMMIT_REF_NAME" = "master" ]; then
+      elif [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         TAGS="-t ${IMAGE_REPO}:latest -t ${IMAGE_REPO}:v${VERSION}"
       else
         TAGS="-t ${IMAGE_REPO}:${CI_COMMIT_REF_SLUG}"
@@ -85,7 +85,7 @@ test:
 
 docker_io:
   extends: .push_image
-  # Protected refs only - master and v* tags. The Docker Hub credentials are protected CI variables, so on
+  # Protected refs only - main and v* tags. The Docker Hub credentials are protected CI variables, so on
   # any other branch this job would run with an empty $REGISTRY_USER and die at `docker login` with "Must
   # provide --username with --password-stdin". gitlab_registry still runs everywhere: it authenticates with
   # the pipeline's own job token, so a feature branch keeps getting an image, just not a public one.
