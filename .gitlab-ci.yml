@@ -1,10 +1,16 @@
 variables:
   DOCKER_DRIVER: overlay2
-  GIT_SSL_NO_VERIFY: "1"
   GOPATH: $CI_PROJECT_DIR/.go
-  # every platform alpine:3.21 is published for; the Go stage cross-compiles
-  # on the build host so no emulation is needed for compiling
-  BUILD_PLATFORMS: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/386,linux/ppc64le,linux/s390x,linux/riscv64
+  # GIT_SSL_NO_VERIFY is deliberately not set: it existed for the retired self-hosted GitLab's
+  # self-signed certificate and on gitlab.com only disabled verification of the runner's own clone.
+  #
+  # Only what the in-cluster BuildKit can actually produce. The list used to name all eight platforms
+  # alpine:3.21 is published for, on the reasoning that the Go stage cross-compiles - true, but the FINAL
+  # stage runs `apk --no-cache add ca-certificates bind-tools` plus adduser/addgroup, and THAT executes on
+  # the target platform. So every arch beyond the builder's QEMU handler (arm64) needs emulation it does
+  # not have. Adding arm/v7 and the rest back means registering those handlers in the builder's
+  # initContainer first (devops/argocd radut/platform/buildkit).
+  BUILD_PLATFORMS: linux/amd64,linux/arm64
 
 stages:
   - test
@@ -31,10 +37,20 @@ test:
 #   master           -> latest, v<VERSION>, <short sha>
 #   git tag vX.Y.Z   -> vX.Y.Z, <short sha>   (tag must match the VERSION file)
 #   other branches   -> <branch slug>, <short sha>
+# The build runs on the IN-CLUSTER BuildKit, not on a local Docker daemon: the runner is a Kubernetes
+# executor with no /var/run/docker.sock, so `docker run --privileged tonistiigi/binfmt` and
+# `--driver docker-container` could only ever fail with "Cannot connect to the Docker daemon" - this
+# project's image has not been built since the runners moved into the clusters. `--driver remote` needs no
+# daemon, and arm64 comes from the QEMU handler the builder's initContainer registers.
+#
+# No runner tag, so it builds on radut's builder (devops/argocd radut/platform/buildkit) rather than the
+# nuc's: nothing pulls this image into the rpi cluster, and the nuc is the contended one.
 .push_image:
   needs: ["test"]
-  image: radut/ubuntu-docker
+  image: docker:27-cli
   stage: image
+  variables:
+    BUILDKIT_ADDR: tcp://buildkit.buildkit.svc.cluster.local:1234
   script:
     - export VERSION=$(tr -d '[:space:]' < VERSION)
     - |
@@ -51,8 +67,11 @@ test:
       export TAGS="${TAGS} -t ${IMAGE_REPO}:${CI_COMMIT_SHORT_SHA}"
     - echo "Pushing ${IMAGE_REPO} version ${VERSION} for ${BUILD_PLATFORMS} with ${TAGS}"
     - printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
-    - docker run --rm --privileged tonistiigi/binfmt --install all
-    - docker buildx create --driver docker-container --name multiarch --use || docker buildx use multiarch
+    # One builder entry per job: the two push jobs run at once, and sharing one made uploads skip blobs
+    # ("blob unknown to registry") elsewhere in the estate.
+    - docker buildx create --name "ci-$CI_JOB_ID" --driver remote "$BUILDKIT_ADDR" --use
+    # Prints the platforms the builder really offers. If arm64 is missing, its QEMU initContainer failed.
+    - docker buildx inspect --bootstrap
     - docker buildx build
         --platform "${BUILD_PLATFORMS}"
         --provenance=false
@@ -60,9 +79,18 @@ test:
         --build-arg VCS_REF="${CI_COMMIT_SHA}"
         ${TAGS}
         --push .
+    - docker buildx imagetools inspect "${IMAGE_REPO}:${CI_COMMIT_SHORT_SHA}"
+  after_script:
+    - docker buildx rm "ci-$CI_JOB_ID" || true
 
 docker_io:
   extends: .push_image
+  # Protected refs only - master and v* tags. The Docker Hub credentials are protected CI variables, so on
+  # any other branch this job would run with an empty $REGISTRY_USER and die at `docker login` with "Must
+  # provide --username with --password-stdin". gitlab_registry still runs everywhere: it authenticates with
+  # the pipeline's own job token, so a feature branch keeps getting an image, just not a public one.
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true"
   variables:
     REGISTRY_HOST: docker.io
     REGISTRY_USER: $DOCKERIO_USER
