@@ -1,7 +1,6 @@
 variables:
   DOCKER_DRIVER: overlay2
   GIT_SSL_NO_VERIFY: "1"
-  NEXUS_REGISTRY: docker-nexus.radut.info
   GOPATH: $CI_PROJECT_DIR/.go
   # every platform alpine:3.21 is published for; the Go stage cross-compiles
   # on the build host so no emulation is needed for compiling
@@ -61,14 +60,6 @@ test:
         --build-arg VCS_REF="${CI_COMMIT_SHA}"
         ${TAGS}
         --push .
-
-nexus:
-  extends: .push_image
-  variables:
-    REGISTRY_HOST: $NEXUS_REGISTRY
-    REGISTRY_USER: $DOCKER_USER
-    REGISTRY_PASSWORD: $DOCKER_PASSWORD
-    IMAGE_REPO: $NEXUS_REGISTRY/$CI_PROJECT_NAME
 
 docker_io:
   extends: .push_image
