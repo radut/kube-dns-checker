@@ -19,7 +19,7 @@ set -euo pipefail
 # ---- this project -----------------------------------------------------------------------------------
 GITLAB_TARGET_HOST=gitlab.com
 GITLAB_PROJECT=radutoader/devops/kube-dns-checker
-INFISICAL_DOMAIN=https://sm.radut.info
+INFISICAL_DOMAIN=https://sm.radut.dev
 INFISICAL_ORG=471b91c6-6908-4632-ae56-06be289f8cf8
 INFISICAL_PROJECT=d2b5a9f1-867a-4912-aba2-1e844062c29a
 INFISICAL_ENV=prod
