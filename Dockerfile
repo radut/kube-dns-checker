@@ -4,7 +4,7 @@
 # cross-compiles for the target, so multi-arch builds need no emulation
 # for the Go compile step:
 #   docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t radut/kube-dns-checker --push .
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
