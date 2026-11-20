@@ -1,3 +1,14 @@
+# One pipeline per commit (owner, 2026-11-20). An MR gets a merge-request pipeline; a branch with an open MR
+# gets no second branch pipeline for the same push; branches without an MR, the default branch and tags get
+# branch/tag pipelines. Same block in every repo of this estate.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
 variables:
   DOCKER_DRIVER: overlay2
   GOPATH: $CI_PROJECT_DIR/.go
@@ -36,7 +47,7 @@ test:
 # Image tags pushed to every registry:
 #   main             -> latest, v<VERSION>, <short sha>
 #   git tag vX.Y.Z   -> vX.Y.Z, <short sha>   (tag must match the VERSION file)
-#   other branches   -> <branch slug>, <short sha>
+#   anything else    -> nothing pushed: MRs and other branches run image:build (below) instead
 # The build runs on the IN-CLUSTER BuildKit, not on a local Docker daemon: the runner is a Kubernetes
 # executor with no /var/run/docker.sock, so `docker run --privileged tonistiigi/binfmt` and
 # `--driver docker-container` could only ever fail with "Cannot connect to the Docker daemon" - this
@@ -59,10 +70,8 @@ test:
           echo "git tag $CI_COMMIT_TAG does not match VERSION file (v$VERSION)"; exit 1
         fi
         TAGS="-t ${IMAGE_REPO}:${CI_COMMIT_TAG}"
-      elif [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        TAGS="-t ${IMAGE_REPO}:latest -t ${IMAGE_REPO}:v${VERSION}"
       else
-        TAGS="-t ${IMAGE_REPO}:${CI_COMMIT_REF_SLUG}"
+        TAGS="-t ${IMAGE_REPO}:latest -t ${IMAGE_REPO}:v${VERSION}"
       fi
       export TAGS="${TAGS} -t ${IMAGE_REPO}:${CI_COMMIT_SHORT_SHA}"
     - echo "Pushing ${IMAGE_REPO} version ${VERSION} for ${BUILD_PLATFORMS} with ${TAGS}"
@@ -87,10 +96,9 @@ docker_io:
   extends: .push_image
   # Protected refs only - main and v* tags. The Docker Hub credentials are protected CI variables, so on
   # any other branch this job would run with an empty $REGISTRY_USER and die at `docker login` with "Must
-  # provide --username with --password-stdin". gitlab_registry still runs everywhere: it authenticates with
-  # the pipeline's own job token, so a feature branch keeps getting an image, just not a public one.
+  # provide --username with --password-stdin".
   rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true"
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG)
   variables:
     REGISTRY_HOST: docker.io
     REGISTRY_USER: $DOCKERIO_USER
@@ -104,3 +112,33 @@ gitlab_registry:
     REGISTRY_USER: $CI_REGISTRY_USER
     REGISTRY_PASSWORD: $CI_REGISTRY_PASSWORD
     IMAGE_REPO: $CI_REGISTRY_IMAGE
+  # Default branch and tags only (owner, 2026-11-20). It used to push <branch slug> images from every
+  # branch; MRs and other branches now build without pushing in image:build.
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG
+
+# MRs and every other branch (bots' deps/* branches included): the same multi-arch build on the in-cluster
+# BuildKit, pushed NOWHERE and needing no credential (owner, 2026-11-20). Proves the Dockerfile still builds
+# for every platform; registries are written only by the jobs above, on the default branch and tags.
+image:build:
+  needs: ["test"]
+  image: docker:27-cli
+  stage: image
+  variables:
+    BUILDKIT_ADDR: tcp://buildkit.buildkit.svc.cluster.local:1234
+  script:
+    - docker buildx create --name "ci-$CI_JOB_ID" --driver remote "$BUILDKIT_ADDR" --use
+    - docker buildx inspect --bootstrap
+    - docker buildx build
+        --platform "${BUILD_PLATFORMS}"
+        --provenance=false
+        --build-arg VERSION="$(tr -d '[:space:]' < VERSION)"
+        --build-arg VCS_REF="${CI_COMMIT_SHA}"
+        .
+    - echo "built ${BUILD_PLATFORMS}, nothing pushed"
+  after_script:
+    - docker buildx rm "ci-$CI_JOB_ID" || true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG
+      when: never
+    - when: on_success
